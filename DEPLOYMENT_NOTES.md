@@ -14,7 +14,7 @@
 ```nginx
 server {
     # Add this line
-    client_max_body_size 20M;
+    client_max_body_size 100M;
     
     location / {
         proxy_pass http://localhost:8000;
