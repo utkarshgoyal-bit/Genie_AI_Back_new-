@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+venv
+.env
+
+# temp files
+~$*.xlsx
+
+# Jupyter / ipynb checkpoints
+.ipynb_checkpoints
+
+# VSCode settings
+.vscode/
+*.code-workspace
+
+/uploads
+
+# Logs
+*.log
+
+# Compiled models or datasets
+*.h5
+*.pkl
+*.joblib
+
+# Gradle / Android cache (avoid long file names issue)
+.gradle/
+build/
+*.apk
+*.aab
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Uploads directory and images
+uploads/
+*.jpg
+*.jpeg
+*.png
+*.jfif
