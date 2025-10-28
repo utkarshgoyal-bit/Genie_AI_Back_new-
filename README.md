@@ -30,3 +30,14 @@ Plant disease detection and product recommendation system powered by AI.
 ```bash
 git clone <your-repo-url>
 cd Genie_AI_Back_new
+## Deployment Notes
+
+### Nginx Configuration Required
+
+For production deployment, ensure Nginx allows large file uploads:
+```nginx
+client_max_body_size 20M;
+```
+
+See `DEPLOYMENT_NOTES.md` for detailed setup instructions.
+
