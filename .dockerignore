@@ -8,6 +8,7 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
+*.py[cod]
 *$py.class
 
 # Virtual environment
@@ -23,15 +24,10 @@ ENV/
 
 # Uploads directory - we don't want to include uploaded files in the Docker image
 uploads/
-
-# Images & media
 *.jpg
 *.jpeg
 *.png
 *.jfif
-*.mp4
-*.avi
-*.mkv
 
 # Environment variables
 .env
@@ -43,18 +39,3 @@ uploads/
 # System files
 .DS_Store
 Thumbs.db
-
-# Databases & data
-*.db
-*.sqlite3
-*.csv
-*.zip
-*.tar.gz
-
-# ML / Notebooks
-*.pth
-*.pt
-runs/
-datasets/
-models/
-notebooks/

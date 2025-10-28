@@ -19,8 +19,6 @@ venv
 .vscode/
 *.code-workspace
 
-/uploads
-
 # Logs
 *.log
 
