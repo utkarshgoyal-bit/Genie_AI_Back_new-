@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    restart: always
+
+  app:
+    build: .
+    expose:
+      - "8000"
+    env_file:
+      - .env
+    volumes:
+      - ./uploads:/app/uploads
+    restart: always
