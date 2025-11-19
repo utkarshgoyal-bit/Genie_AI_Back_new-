@@ -65,18 +65,13 @@ def optimize_image(image_data: bytes, image_type: str = None) -> bytes:
 def select_best_image(images: list[bytes]) -> tuple[bytes, str, int]:
     """
     SMART: Select best image for disease analysis.
+    ALWAYS selects the second image (index 1) when 2 images are uploaded.
     Returns: (selected_image_bytes, image_type, selected_index)
     """
     if len(images) == 1:
-        return images[1], detect_image_type(images[1]), 0
+        return images[0], detect_image_type(images[0]), 0
     
-    # Detect types for all images
-    image_types = [detect_image_type(img) for img in images]
-    
-    # Prefer close-up for disease analysis
-    if "close_up" in image_types:
-        idx = image_types.index("close_up")
-        return images[idx], "close_up", idx
-    
-    # No close-up found, use first image
-    return images[1], image_types[0], 0
+    # When 2 images uploaded, ALWAYS use the second image (index 1)
+    selected_image = images[1]
+    image_type = detect_image_type(selected_image)
+    return selected_image, image_type, 1
