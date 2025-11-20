@@ -1,4 +1,3 @@
-import os
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.routes.analyze_routes import router as analyze_router
@@ -18,44 +17,14 @@ async def lifespan(app: FastAPI):
     print("="*60)
     
     print("📊 Creating database tables...")
-    try:
-        Base.metadata.create_all(bind=engine)
-        print("✅ Database tables ready")
-    except Exception as db_error:
-        print(f"❌ Error creating database tables: {str(db_error)}")
-        raise
+    Base.metadata.create_all(bind=engine)
+    print("✅ Database tables ready")
     
     print("\n📦 Checking product database...")
-    try:
-        excel_path = "Product_List.xlsx"
-        parent_excel_path = os.path.join(os.path.dirname(os.getcwd()), "Product_List.xlsx")
-        
-        if os.path.exists(excel_path):
-            print(f"✅ Found Product_List.xlsx in current directory")
-        elif os.path.exists(parent_excel_path):
-            print(f"✅ Found Product_List.xlsx in parent directory")
-            excel_path = parent_excel_path
-        else:
-            print("❌ Product_List.xlsx not found!")
-            print("   Please ensure Product_List.xlsx is present in the root directory")
-            print(f"   Current directory: {os.getcwd()}")
-            print(f"   Parent directory: {os.path.dirname(os.getcwd())}")
-            raise FileNotFoundError("Product_List.xlsx not found")
-
-        if ProductImportService.import_products_from_excel(engine):
-            print("✅ Product import successful")
-            
-            # Reload cache immediately after successful import
-            print("\n💾 Loading products into in-memory cache...")
-            load_products_into_cache()
-            print("✅ Products loaded into cache")
-        else:
-            print("❌ Product import failed. Check logs for details.")
-            raise Exception("Product import failed")
-            
-    except Exception as error:
-        print(f"❌ Error during product setup: {str(error)}")
-        raise
+    ProductImportService.import_products_from_excel(engine)
+    
+    print("\n💾 Loading products into in-memory cache...")
+    load_products_into_cache()
     
     stats = ProductImportService.get_product_stats(engine)
     if stats:

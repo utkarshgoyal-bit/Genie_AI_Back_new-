@@ -14,12 +14,9 @@ def load_products_into_cache():
     global PRODUCT_CACHE
     logger.info("Initializing product cache...")
     try:
-        from app.models.product_model import Product
-        from sqlalchemy.orm import Session
-
-        with Session(engine) as session:
-            products = session.query(Product).all()
-            PRODUCT_CACHE = [product.to_dict() for product in products]
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT * FROM products")).mappings().all()
+            PRODUCT_CACHE = [dict(row) for row in result]
             logger.info(f"Successfully loaded {len(PRODUCT_CACHE)} products into in-memory cache.")
     except Exception as e:
         logger.critical(f"Failed to load products into cache. Search will not work. Error: {e}", exc_info=True)

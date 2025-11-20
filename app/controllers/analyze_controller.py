@@ -1,7 +1,7 @@
 from fastapi import UploadFile, HTTPException, Depends, Request, BackgroundTasks
 from typing import List
 from sqlalchemy.orm import Session
-from app.services.analyze_service import analyze_images
+from app.services.analyze_service_FINAL import analyze_images
 from ..models.detection_model import PlantDetection
 from app.controllers.otp_controller import decode_access_token
 from app.utils.s3_uploader import upload_to_s3
@@ -33,7 +33,7 @@ async def handle_analyze(
     """
     OPTIMIZED: Parallel processing for faster response
     - AI analysis runs first (priority)
-    - S3 upload runs in background (ALL images uploaded)
+    - S3 upload runs in background
     - Database save runs in background
     """
     
@@ -88,38 +88,31 @@ async def handle_analyze(
     
     analysis_time = time.time() - analysis_start
 
-    # 4. Prepare S3 filenames for ALL images
+    # 4. S3 upload in background (non-blocking)
+    selected_idx = result.get('_metadata', {}).get('selected_image_index', 0)
+    selected_image_bytes = image_bytes_list[selected_idx]
+    selected_filename = filenames[selected_idx]
+    selected_content_type = content_types[selected_idx]
+    
+    filename = f"plant_detections/{uuid4()}_{selected_filename}"
+    
+    # Placeholder URL (S3 upload happens in background)
     bucket_name = os.getenv("AWS_BUCKET_NAME")
     region = os.getenv("AWS_REGION")
+    image_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{filename}"
     
-    s3_filenames = []
-    for filename in filenames:
-        s3_filename = f"plant_detections/{uuid4()}_{filename}"
-        s3_filenames.append(s3_filename)
-    
-    # Get selected image URL for database
-    selected_idx = result.get('_metadata', {}).get('selected_image_index', 0)
-    selected_s3_filename = s3_filenames[selected_idx]
-    image_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{selected_s3_filename}"
-    
-    # 5. Upload ALL images to S3 in background (non-blocking)
-    async def upload_all_in_background():
-        upload_tasks = []
-        for i, (img_bytes, s3_filename, content_type) in enumerate(
-            zip(image_bytes_list, s3_filenames, content_types)
-        ):
-            upload_tasks.append(upload_to_s3(img_bytes, s3_filename, content_type))
-        
+    # Start S3 upload asynchronously (don't wait)
+    async def upload_in_background():
         try:
-            await asyncio.gather(*upload_tasks)
-            print(f"✅ All {len(upload_tasks)} images uploaded to S3")
+            await upload_to_s3(selected_image_bytes, filename, selected_content_type)
+            print(f"✅ S3 upload completed: {filename}")
         except Exception as e:
             print(f"❌ S3 upload failed: {e}")
     
     # Fire and forget
-    asyncio.create_task(upload_all_in_background())
+    asyncio.create_task(upload_in_background())
     
-    # 6. Database save in background
+    # 5. Database save in background
     detection_data = {
         "mobile": mobile,
         "common_name": result.get("common_name"),
@@ -148,7 +141,7 @@ async def handle_analyze(
         'auth': round(auth_time, 2),
         'image_read': round(read_time, 2),
         'ai_analysis': round(analysis_time, 2),
-        'note': f'All {len(images)} images uploaded to S3 in background, DB save in background'
+        'note': 'S3 upload and DB save run in background'
     }
     
     return {"message": "Detection saved", "data": {**result, "image": image_url}}

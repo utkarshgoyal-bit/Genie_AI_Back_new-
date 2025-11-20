@@ -1,116 +1,89 @@
 import os
 import pandas as pd
 import logging
+import csv
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from app.models.product_model import Product
+from app.services.match_utils import fuzzy_lookup, normalize
 from typing import Dict, Any
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+SCORE_CUTOFF = int(os.getenv("FUZZY_SCORE_CUTOFF", 85))
+UNMAPPED_LOG_FILE = "unmapped_plants_log.csv"
+
 class ProductImportService:
+    @staticmethod
+    def _log_unmapped_plant(data):
+        file_exists = os.path.isfile(UNMAPPED_LOG_FILE)
+        with open(UNMAPPED_LOG_FILE, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=data.keys())
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(data)
+
     @staticmethod
     def import_products_from_excel(engine):
         excel_path = "Product_List.xlsx"
         if not os.path.exists(excel_path):
-            logger.warning(f"Product_List.xlsx not found in current directory: {os.getcwd()}")
-            # Try parent directory
-            parent_excel_path = os.path.join(os.path.dirname(os.getcwd()), "Product_List.xlsx")
-            if os.path.exists(parent_excel_path):
-                excel_path = parent_excel_path
-                logger.info(f"Found Product_List.xlsx in parent directory: {parent_excel_path}")
-            else:
-                logger.error("Product_List.xlsx not found in current or parent directory")
-                return False
+            logger.warning(f"'{excel_path}' not found. Skipping product import.")
+            return
 
         Session = sessionmaker(bind=engine)
         session = Session()
-
         try:
-            # Read and validate the Excel file
-            df = pd.read_excel(excel_path)
-            logger.info(f"Successfully read {len(df)} rows from {excel_path}")
-
-            # Validate required columns
-            required_cols = {'Scientific Plant Name', 'Disease', 'Scientific_Disease Name', 'Product Name', 'Product Link', 'How to use', 'Product Image'}
-            if not required_cols.issubset(df.columns):
-                logger.error(f"Excel file is missing required columns. Needed: {required_cols}. Found: {set(df.columns)}")
-                return False
-
-            # Clean and prepare data
-            df = df.dropna(subset=['Scientific Plant Name', 'Scientific_Disease Name', 'Product Name'])  # Ensure essential fields aren't null
-            
             with session.begin():
-                # Clear existing products to ensure fresh data
-                session.execute(text("DELETE FROM products"))
-                logger.info("Cleared existing products from database")
+                count_result = session.execute(text("SELECT COUNT(*) FROM products")).scalar()
+                if count_result > 0:
+                    logger.info("Product table is not empty. Skipping import.")
+                    return
 
-                # Prepare products for insertion
+                df = pd.read_excel(excel_path)
+                required_cols = {'product_name', 'scientific_name', 'disease_common_name', 'disease_scientific_name'}
+                if not required_cols.issubset(df.columns):
+                    logger.error(f"Excel file is missing required columns. Needed: {required_cols}. Found: {set(df.columns)}")
+                    raise ValueError("Invalid Excel schema")
+
+                plant_map_df = pd.read_excel("Plant_Map.xlsx")
+                plant_map = dict(zip(plant_map_df['Common Name'], plant_map_df['Scientific Name']))
+                normalized_map = {normalize(k): v for k, v in plant_map.items()}
+                map_choices = tuple(normalized_map.keys())
+
                 products_to_insert = []
-                for idx, row in df.iterrows():
-                    # Debug print the raw row data
-                    logger.info(f"\nProcessing row {idx + 1}:")
-                    for col in df.columns:
-                        logger.info(f"{col}: {row[col]}")
-                    
-                    product = {
-                            "product_name": str(row['Product Name']).strip() if pd.notna(row['Product Name']) else '',
-                            "scientific_name": str(row['Scientific Plant Name']).strip() if pd.notna(row['Scientific Plant Name']) else '',
-                            "disease": str(row['Disease']).strip() if pd.notna(row['Disease']) else '',
-                            "disease_scientific_name": str(row['Scientific_Disease Name']).strip() if pd.notna(row['Scientific_Disease Name']) else '',
-                            "product_link": str(row['Product Link']).strip() if pd.notna(row['Product Link']) else '',
-                            "how_to_use": str(row['How to use']).strip() if pd.notna(row['How to use']) else '',
-                            "product_image": str(row['Product Image']).strip() if pd.notna(row['Product Image']) else '',  # ADD THIS LINE
-                            }
-                    
-                    # Debug print the processed product data
-                    logger.info(f"Processed product data:")
-                    for key, value in product.items():
-                        logger.info(f"{key}: {value}")
-                    
-                    products_to_insert.append(product)
-                    logger.info(f"Added product {len(products_to_insert)} to insert list\n")
+                for _, row in df.iterrows():
+                    common_name = row.get('plant_common_name')
+                    scientific_name = row.get('scientific_name')
+
+                    if pd.isna(scientific_name) and pd.notna(common_name):
+                        norm_common = normalize(common_name)
+                        match_result = fuzzy_lookup(norm_common, map_choices, score_cutoff=SCORE_CUTOFF)
+                        
+                        if match_result:
+                            matched_norm_name, score, _ = match_result
+                            scientific_name = normalized_map[matched_norm_name]
+                            if score < 95:
+                                ProductImportService._log_unmapped_plant({"product_name": row.get('product_name'), "input_common_name": common_name, "matched_scientific_name": scientific_name, "score": score, "status": "low_confidence_match"})
+                        else:
+                            ProductImportService._log_unmapped_plant({"product_name": row.get('product_name'), "input_common_name": common_name, "matched_scientific_name": "N/A", "score": 0, "status": "unmapped"})
+                            continue
+
+                    if pd.notna(scientific_name):
+                        products_to_insert.append({"product_name": row.get('product_name'), "scientific_name": scientific_name, "disease_common_name": row.get('disease_common_name'), "disease_scientific_name": row.get('disease_scientific_name')})
 
                 if products_to_insert:
-                    logger.info(f"Inserting {len(products_to_insert)} products...")
-                    try:
-                        session.execute(
-                            Product.__table__.insert(),
-                            products_to_insert
-                        )
-                        session.commit()
-                        logger.info(f"Successfully imported {len(products_to_insert)} products")
-                        return True
-                    except SQLAlchemyError as e:
-                        logger.error(f"Database error during product import: {str(e)}")
-                        session.rollback()
-                        return False
-                else:
-                    logger.warning("No valid products found to import")
-                    return False
+                    logger.info(f"Bulk inserting {len(products_to_insert)} products...")
+                    session.execute(Product.__table__.insert(), products_to_insert)
                 
+                logger.info("Product import process completed successfully.")
         except Exception as e:
-            logger.error(f"An error occurred during product import: {str(e)}", exc_info=True)
-            if session:
-                session.rollback()
-            return False
+            logger.error(f"An error occurred during product import. Rolling back transaction. Error: {e}", exc_info=True)
+            session.rollback()
+            raise
         finally:
-            if session:
-                session.close()
-
-    @staticmethod
-    def get_product_stats(engine) -> Dict[str, Any]:
-        try:
-            with engine.connect() as conn:
-                total = conn.execute(text("SELECT COUNT(id) FROM products")).scalar_one_or_none()
-                unique_diseases = conn.execute(text("SELECT COUNT(DISTINCT disease_scientific_name) FROM products")).scalar_one_or_none()
-                unique_plants = conn.execute(text("SELECT COUNT(DISTINCT scientific_name) FROM products")).scalar_one_or_none()
-                return {"total_products": total or 0, "unique_diseases": unique_diseases or 0, "unique_plants": unique_plants or 0}
-        except Exception as e:
-            logger.error(f"Could not retrieve product stats: {e}", exc_info=True)
-            return {}
+            session.close()
 
     @staticmethod
     def get_product_stats(engine) -> Dict[str, Any]:

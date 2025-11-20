@@ -12,15 +12,3 @@ class Product(Base):
     product_name = Column(String(255), nullable=True)
     how_to_use = Column(Text, nullable=True)
     product_image = Column(Text, nullable=True)
-
-    def to_dict(self):
-     return {
-        "id": self.id,
-        "product_name": self.product_name,  # Changed from "name"
-        "scientific_name": self.scientific_name,
-        "disease": self.disease,
-        "disease_scientific_name": self.disease_scientific_name,
-        "product_link": self.product_link,
-        "how_to_use": self.how_to_use,
-        "product_image": self.product_image
-     }

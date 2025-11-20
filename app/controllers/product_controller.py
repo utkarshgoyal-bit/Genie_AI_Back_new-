@@ -4,10 +4,9 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from app.config.db import get_db
 from app.models.product_model import Product
-from app.services.match_utils import fuzzy_lookup, normalize, tokenize_scientific_name
+from app.services.match_utils import fuzzy_lookup, normalize
 from app.services.product_cache import get_cached_products
 from typing import List, Dict, Any
-from difflib import SequenceMatcher
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -16,155 +15,58 @@ SCORE_CUTOFF = int(os.getenv("FUZZY_SCORE_CUTOFF", 85))
 WEIGHT_DISEASE = float(os.getenv("FUZZY_WEIGHT_DISEASE", 0.6))
 WEIGHT_PLANT = float(os.getenv("FUZZY_WEIGHT_PLANT", 0.4))
 
-def fuzzy_match_score(a: str, b: str) -> float:
-    """Calculate a fuzzy match score between two strings."""
-    if not a or not b:
-        return 0
-    return SequenceMatcher(None, a.lower(), b.lower()).ratio() * 100
-
 router = APIRouter()
 
 @router.get("/products", response_model=List[Dict[str, Any]])
-def get_all_products():
+def get_all_products(db: Session = Depends(get_db)):
     try:
-        logger.info("Fetching products from cache")
-        return get_cached_products()
+        products = db.query(Product).all()
+        return [p.to_dict() for p in products]
     except Exception as e:
-        logger.error(f"Error fetching products from cache: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error fetching products: {str(e)}"
-        )
-    except Exception as e:
-        logger.error(f"Error fetching all products: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error fetching products: {str(e)}"
-        )
+        logger.error(f"Error fetching all products: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error.")
 
 @router.get("/products/search", response_model=List[Dict[str, Any]])
-async def get_products_by_scientific_name(disease_scientific_name: str, plant_scientific_name: str):
-    """
-    Enhanced product search that uses a tiered matching approach:
-    1. Try exact scientific name matches first
-    2. Then try token-based matching
-    3. Finally fall back to fuzzy matching
-    """
-    logger.info(f"Starting product search with disease: {disease_scientific_name}, plant: {plant_scientific_name}")
-    
-    try:
-        if not disease_scientific_name and not plant_scientific_name:
-            raise HTTPException(status_code=400, detail="Please provide at least one search parameter.")
+def get_products_by_scientific_name(disease_scientific_name: str, plant_scientific_name: str):
+    if not disease_scientific_name and not plant_scientific_name:
+        raise HTTPException(status_code=400, detail="Please provide at least one search parameter.")
 
-        all_products = get_cached_products()
-        if not all_products:
-            logger.warning("Product cache is empty. Search service is unavailable.")
-            raise HTTPException(status_code=503, detail="Product service is temporarily unavailable.")
+    all_products = get_cached_products()
+    if not all_products:
+        logger.warning("Product cache is empty. Search service is unavailable.")
+        raise HTTPException(status_code=503, detail="Product service is temporarily unavailable.")
 
-        logger.info(f"Searching products for disease '{disease_scientific_name}' and plant '{plant_scientific_name}'")
-        logger.info(f"Total products in cache: {len(all_products)}")
+    norm_disease = normalize(disease_scientific_name)
+    norm_plant = normalize(plant_scientific_name)
 
-        # Normalize input
-        norm_disease = normalize(disease_scientific_name)
-        norm_plant = normalize(plant_scientific_name)
+    scored_products = []
+    for product in all_products:
+        disease_score = 0
+        plant_score = 0
         
-        # Track matches at different confidence levels
-        exact_matches = []
-        strong_matches = []
-        fuzzy_matches = []
+        if norm_disease and product.get("disease_scientific_name"):
+            match = fuzzy_lookup(norm_disease, (normalize(product["disease_scientific_name"]),), score_cutoff=0)
+            if match:
+                disease_score = match[1]
 
-        logger.info(f"Normalized search terms - Disease: {norm_disease}, Plant: {norm_plant}")
-
-        for product in all_products:
-            product_disease = normalize(product.get("disease_scientific_name", ""))
-            product_plant = normalize(product.get("scientific_name", ""))
-            
-            # Try exact matches first (case-insensitive)
-            logger.info(f"\nChecking product:")
-            logger.info(f"Product Name: {product.get('product_name')}")
-            logger.info(f"Scientific Name: {product.get('scientific_name')}")
-            logger.info(f"Disease: {product.get('disease')}")
-            logger.info(f"Disease Scientific Name: {product.get('disease_scientific_name')}")
-            
-            # First try exact match
-            if norm_disease == product_disease and norm_plant == product_plant:
-                logger.info(f"✅ EXACT MATCH - Score: 100")
-                exact_matches.append({
-                    "product": product,
-                    "score": 100,
-                    "match_type": "exact"
-                })
-                continue
-
-            # Try fuzzy matching for disease and plant separately
-            disease_score = fuzzy_match_score(norm_disease, product_disease)
-            plant_score = fuzzy_match_score(norm_plant, product_plant)
-
-            # Calculate weighted score
-            combined_score = (disease_score * WEIGHT_DISEASE + plant_score * WEIGHT_PLANT)
-            
-            logger.info(f"Matching scores:")
-            logger.info(f"Disease match: {disease_score:.2f}% ({norm_disease} vs {product_disease})")
-            logger.info(f"Plant match: {plant_score:.2f}% ({norm_plant} vs {product_plant})")
-            logger.info(f"Combined score: {combined_score:.2f}%")
-
-            if combined_score >= 85:  # Strong match
-                logger.info(f"Found strong match: {product.get('product_name')} (Score: {combined_score:.2f})")
-                strong_matches.append({"product": product, "score": combined_score})
-            elif combined_score >= 70:  # Fuzzy match
-                logger.info(f"Found fuzzy match: {product.get('product_name')} (Score: {combined_score:.2f})")
-                fuzzy_matches.append({"product": product, "score": combined_score})
-            
-            # Fall back to fuzzy matching for remaining cases
-            disease_matches = fuzzy_lookup(norm_disease, (product_disease,), score_cutoff=60)
-            plant_matches = fuzzy_lookup(norm_plant, (product_plant,), score_cutoff=60)
-            
-            if disease_matches and plant_matches:
-                disease_score = disease_matches[0][1]
-                plant_score = plant_matches[0][1]
-                fuzzy_score = (disease_score * 0.6 + plant_score * 0.4)
-                if fuzzy_score >= 60:  # 60% fuzzy match threshold
-                    fuzzy_matches.append({"product": product, "score": fuzzy_score})
-
-        # Combine results in priority order
-        all_matches = exact_matches + strong_matches + fuzzy_matches
+        if norm_plant and product.get("scientific_name"):
+            match = fuzzy_lookup(norm_plant, (normalize(product["scientific_name"]),), score_cutoff=0)
+            if match:
+                plant_score = match[1]
         
-        # Sort by score and take top matches
-        top_results = sorted(all_matches, key=lambda x: x["score"], reverse=True)[:5]
+        combined_score = (disease_score * WEIGHT_DISEASE) + (plant_score * WEIGHT_PLANT)
 
-        logger.info(f"Search results - Exact: {len(exact_matches)}, Strong: {len(strong_matches)}, Fuzzy: {len(fuzzy_matches)}")
+        if combined_score >= SCORE_CUTOFF:
+            scored_products.append({"product": product, "score": round(combined_score, 2)})
 
-        if not top_results:
-            logger.warning(f"No products found matching disease '{disease_scientific_name}' and plant '{plant_scientific_name}'")
-            raise HTTPException(status_code=404, detail="No matching products found.")
+    top_results = sorted(scored_products, key=lambda x: x["score"], reverse=True)[:3]
 
-        # Return full product details
-        matched_products = []
-        logger.info("\nFinal matches:")
-        for match in top_results:
-            product = match["product"]
-            product_details = {
-                "id": len(matched_products) + 1,
-                "product_name": product.get("name", "N/A"),  # Changed from product_name to name
-                "product_link": product.get("product_link", "N/A"),
-                "how_to_use": product.get("how_to_use", "N/A"),
-                "match_score": round(match["score"], 2),
-                "disease": product.get("disease", "N/A"),
-                "disease_scientific_name": product.get("disease_scientific_name", "N/A"),
-                "plant_scientific_name": product.get("scientific_name", "N/A")
-            }
-            logger.info(f"\nMatch {product_details['id']}:")
-            for key, value in product_details.items():
-                logger.info(f"{key}: {value}")
-            matched_products.append(product_details)
+    logger.info("Fuzzy search performed", extra={"search_terms": {"disease": norm_disease, "plant": norm_plant}, "results_count": len(top_results)})
 
-        return matched_products
-    except Exception as e:
-        logger.error(f"Error searching for products: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Error searching for products: {str(e)}"
-        )
+    if not top_results:
+        raise HTTPException(status_code=404, detail="No matching products found.")
+
+    return [result["product"] for result in top_results]
 
 @router.get("/products/by-disease/{disease_name}", response_model=List[Dict[str, Any]])
 def get_products_by_disease(disease_name: str, db: Session = Depends(get_db)):

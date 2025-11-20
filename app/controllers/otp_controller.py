@@ -7,7 +7,6 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.config.db import SessionLocal
 from app.models.otp_model import OTP
-from app.models.detection_model import PlantDetection
 
 # JWT Configuration (merged from jwt_handler.py)
 SECRET_KEY = os.getenv("JWT_SECRET")
@@ -108,16 +107,3 @@ class OTPController:
             }
         else:
             raise HTTPException(status_code=400, detail="Invalid OTP")
-
-    @staticmethod
-    def delete_account(mobile: str, db: Session):
-        try:
-            # Delete all OTP records for the mobile
-            db.query(OTP).filter(OTP.mobile == mobile).delete()
-            # Delete all PlantDetection records for the mobile
-            db.query(PlantDetection).filter(PlantDetection.mobile == mobile).delete()
-            db.commit()
-            return {"message": "Account deleted successfully"}
-        except Exception as e:
-            db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
