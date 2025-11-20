@@ -56,11 +56,19 @@ async def analyze_images(images: list[bytes]) -> dict:
     print(f"🎯 Selected best image for YOLO detection (index: {selected_idx})")
 
     # Step 2: YOLO Detection
+    # Step 2: YOLO Detection
     print("🔍 Running YOLO plant detection...")
-    with open("/tmp/temp_detect.jpg", "wb") as f:
+    import tempfile
+    import os
+    
+    # Use cross-platform temp directory
+    temp_dir = tempfile.gettempdir()
+    temp_image_path = os.path.join(temp_dir, "temp_detect.jpg")
+    
+    with open(temp_image_path, "wb") as f:
         f.write(best_image)
 
-    yolo_results = model("/tmp/temp_detect.jpg", verbose=False)
+    yolo_results = model(temp_image_path, verbose=False)
     detections = yolo_results[0].boxes
 
     if len(detections) == 0:

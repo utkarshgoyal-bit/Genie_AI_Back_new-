@@ -68,8 +68,19 @@ async def test_analyze_no_auth(
         }
     
     # Run analysis
+    # Run analysis
     print(f"🤖 Starting analysis with version: {version}")
-    result = await analyze_images(image_bytes_list)
+    try:
+        result = await analyze_images(image_bytes_list)
+    except Exception as e:
+        import traceback
+        print(f"❌ ERROR: {e}")
+        print(traceback.format_exc())
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "version": version
+        }
     
     print(f"✅ Analysis complete")
     print(f"{'='*60}\n")
