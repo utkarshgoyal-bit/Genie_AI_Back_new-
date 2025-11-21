@@ -45,3 +45,23 @@ def get_products_by_disease(disease_name: str, db: Session = Depends(get_db)):
     if not products:
         raise HTTPException(status_code=404, detail="No products found for this disease")
     return products
+
+@router.get("/search")
+def search_products(
+    disease_scientific_name: str = Query(...),
+    plant_scientific_name: str = Query(...)
+):
+    """
+    Search products by disease scientific name and plant scientific name.
+
+    Query parameters:
+    - disease_scientific_name: Scientific name of the disease (required)
+    - plant_scientific_name: Scientific name of the plant (required)
+    """
+    products = product_controller.get_products_by_scientific_name(
+        disease_scientific_name,
+        plant_scientific_name
+    )
+    if not products:
+        raise HTTPException(status_code=404, detail="No matching products found.")
+    return products
