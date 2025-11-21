@@ -137,21 +137,20 @@ async def handle_analyze(
 
     # Step 6: Prepare database record
     detection_data = {
-        "id": detection_id,
-        "mobile": mobile,
-        "common_name": diagnosis.get("plant_common_name"),
-        "scientific_name": diagnosis.get("plant_scientific_name"),
-        "plant_confidence": diagnosis.get("plant_confidence"),
-        "disease": diagnosis.get("disease"),
-        "disease_scientific_name": diagnosis.get("disease_scientific_name"),
-        "disease_confidence": diagnosis.get("disease_confidence"),
-        "diagnosis_type": diagnosis.get("diagnosis_type"),
-        "symptoms": json.dumps(diagnosis.get("symptoms", [])),
-        "cause": diagnosis.get("cause"),
-        "treatment": json.dumps(diagnosis.get("treatment", [])),
-        "prevention": json.dumps(diagnosis.get("prevention", [])),
-        "image_urls": json.dumps(s3_urls),  # Store all image URLs
-        "images_analyzed": len(image_bytes_list)
+    "id": detection_id,
+    "mobile": "guest",
+    "common_name": diagnosis.get("plant_common_name"),
+    "scientific_name": diagnosis.get("plant_scientific_name"),
+    "plant_confidence": diagnosis.get("plant_confidence"),
+    "disease": diagnosis.get("disease"),
+    "disease_scientific_name": diagnosis.get("disease_scientific_name"),
+    "disease_confidence": diagnosis.get("disease_confidence"),
+    "symptoms": diagnosis.get("symptoms", []),  # No json.dumps
+    "cause": diagnosis.get("cause"),
+    "treatment": diagnosis.get("treatment", []),  # No json.dumps
+    "prevention": diagnosis.get("prevention", []),  # No json.dumps
+    "image_urls": s3_urls,  # No json.dumps
+    "images_analyzed": len(image_bytes_list)
     }
 
     # Step 7: Save to database (background)
@@ -283,21 +282,20 @@ async def handle_analyze_direct(
 
     # Step 5: Prepare database record (mobile="guest" for unauthenticated)
     detection_data = {
-        "id": detection_id,
-        "mobile": "guest",
-        "common_name": diagnosis.get("plant_common_name"),
-        "scientific_name": diagnosis.get("plant_scientific_name"),
-        "plant_confidence": diagnosis.get("plant_confidence"),
-        "disease": diagnosis.get("disease"),
-        "disease_scientific_name": diagnosis.get("disease_scientific_name"),
-        "disease_confidence": diagnosis.get("disease_confidence"),
-        "diagnosis_type": diagnosis.get("diagnosis_type"),
-        "symptoms": json.dumps(diagnosis.get("symptoms", [])),
-        "cause": diagnosis.get("cause"),
-        "treatment": json.dumps(diagnosis.get("treatment", [])),
-        "prevention": json.dumps(diagnosis.get("prevention", [])),
-        "image_urls": json.dumps(s3_urls),
-        "images_analyzed": len(image_bytes_list)
+    "id": detection_id,
+    "mobile": "guest",
+    "common_name": diagnosis.get("plant_common_name"),
+    "scientific_name": diagnosis.get("plant_scientific_name"),
+    "plant_confidence": diagnosis.get("plant_confidence"),
+    "disease": diagnosis.get("disease"),
+    "disease_scientific_name": diagnosis.get("disease_scientific_name"),
+    "disease_confidence": diagnosis.get("disease_confidence"),
+    "symptoms": diagnosis.get("symptoms", []),  # No json.dumps
+    "cause": diagnosis.get("cause"),
+    "treatment": diagnosis.get("treatment", []),  # No json.dumps
+    "prevention": diagnosis.get("prevention", []),  # No json.dumps
+    "image_urls": s3_urls,  # No json.dumps
+    "images_analyzed": len(image_bytes_list)
     }
 
     # Step 6: Save to database (background)
