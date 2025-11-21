@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from app.services.analyze_service_FINAL import analyze_images
 from ..models.detection_model import PlantDetection
 from app.controllers.otp_controller import decode_access_token
-from app.controllers.product_controller import find_product_by_diagnosis
+from app.controllers.product_controller_FINAL import find_product_by_diagnosis
+from app.config.db import SessionLocal
 from app.utils.s3_uploader import upload_to_s3
 from app.config.db import get_db
 from uuid import uuid4
@@ -14,15 +15,26 @@ import os
 import json
 
 def save_to_database_background(db: Session, detection_data: dict):
-    """Background task to save detection to database"""
+    """Background task to save detection to database.
+
+    NOTE: The incoming `db` from the request is request-scoped and will be
+    closed before background tasks run. Create a fresh session here instead
+    to avoid using a closed session.
+    """
+    session = None
     try:
+        session = SessionLocal()
         detection = PlantDetection(**detection_data)
-        db.add(detection)
-        db.commit()
+        session.add(detection)
+        session.commit()
         print("✅ Detection saved to database (background)")
     except Exception as e:
         print(f"❌ Background DB save failed: {e}")
-        db.rollback()
+        if session:
+            session.rollback()
+    finally:
+        if session:
+            session.close()
 
 async def handle_analyze(
     images: List[UploadFile],

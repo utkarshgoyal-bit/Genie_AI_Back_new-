@@ -95,7 +95,7 @@ async def analyze_images(images: list[bytes]) -> dict:
 
 DIAGNOSTIC FUNNEL (check in this order):
 1. Plant Identification: Confirm species (scientific + common name)
-2. Holistic Assessment: Overall health, growth stage, environment clues, dried leaves, discoloration
+2. Holistic Assessment: Overall health, growth stage, environment clues
 3. Abiotic Stress FIRST: Check water, light, nutrients, temperature
 4. Biotic Issues: Only if abiotic factors ruled out - fungal, bacterial, pest
 5. Care Recommendations: Specific, actionable steps

@@ -90,7 +90,7 @@ def find_product_by_diagnosis(
         # Calculate plant similarity (scientific name)
         plant_similarity = calculate_similarity(
             plant_scientific_name,
-            product.scientific_plant_name or ""
+            product.scientific_name or ""
         )
 
         # Calculate disease similarity
@@ -113,12 +113,12 @@ def find_product_by_diagnosis(
         logger.info(f"  → Phase 2: Fallback to common name '{plant_common_name}' (Phase 1 score: {best_score:.2%})")
 
         for product in all_products:
-            # Calculate plant similarity (common name vs scientific plant name in DB)
+            # Calculate plant similarity (common name vs scientific name in DB)
             # Note: Product_List.xlsx only has "Scientific Plant Name" column
             # So we fuzzy match common name against scientific names in database
             plant_similarity = calculate_similarity(
                 plant_common_name,
-                product.scientific_plant_name or ""
+                product.scientific_name or ""
             )
 
             # Calculate disease similarity
@@ -143,13 +143,8 @@ def find_product_by_diagnosis(
         return {
             "product_id": best_match.id,
             "product_name": best_match.product_name,
-            "brand_name": best_match.brand_name,
             "disease": best_match.disease,
-            "scientific_plant_name": best_match.scientific_plant_name,
-            "dosage": best_match.dosage,
-            "frequency": best_match.frequency,
-            "active_ingredients": best_match.active_ingredients,
-            "amazon_link": best_match.amazon_link,
+            "scientific_name": best_match.scientific_name,
             "match_confidence": round(best_score, 4),
             "match_type": best_match_type
         }

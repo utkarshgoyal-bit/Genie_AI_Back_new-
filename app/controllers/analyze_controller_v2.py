@@ -1,7 +1,7 @@
 from fastapi import UploadFile, HTTPException, Depends, Request, BackgroundTasks
 from typing import List
 from sqlalchemy.orm import Session
-from app.services.analyze_service_FINAL_v4 import analyze_images
+from app.services.analyze_service_v4 import analyze_images
 from ..models.detection_model import PlantDetection
 from app.controllers.otp_controller import decode_access_token
 from app.utils.s3_uploader import upload_to_s3

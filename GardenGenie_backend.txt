@@ -77,9 +77,9 @@ The application follows a **modular, layered architecture**:
 │  │ ├─ product_import_service.py    │   │
 │  │ ├─ product_cache.py             │   │
 │  │ ├─ match_utils.py               │   │
-│  │ ├─ analyze_service_FINAL.py           │   │
+│  │ ├─ analyze_service.py           │   │
 │  │ ├─ image_utils.py               │   │
-│  │ └─ analyze_service_FINAL_v4.py        │   │
+│  │ └─ analyze_service_v4.py        │   │
 │  └──────────────────────────────────┘   │
 │                                          │
 │  ┌──────────────────────────────────┐   │
@@ -183,9 +183,9 @@ Genie_AI_Backend/
 │   │   ├── product_import_service.py    # Excel import & data loading
 │   │   ├── product_cache.py             # In-memory product cache
 │   │   ├── match_utils.py               # Fuzzy matching utilities
-│   │   ├── analyze_service_FINAL.py           # Plant disease analysis (v1)
-│   │   ├── analyze_service_FINAL_v2.py        # Plant disease analysis (v2)
-│   │   ├── analyze_service_FINAL_v4.py        # Plant disease analysis (v4) - Current
+│   │   ├── analyze_service.py           # Plant disease analysis (v1)
+│   │   ├── analyze_service_v2.py        # Plant disease analysis (v2)
+│   │   ├── analyze_service_v4.py        # Plant disease analysis (v4) - Current
 │   │   └── image_utils.py               # Image processing utilities
 │   ├── routes/
 │   │   ├── __init__.py
@@ -358,7 +358,7 @@ fuzzy_lookup(
   - `disease_common_name`: Disease common name
   - `disease_scientific_name`: Disease scientific name
 
-### 8. Analyze Service (`app/services/analyze_service_FINAL_v4.py`)
+### 8. Analyze Service (`app/services/analyze_service_v4.py`)
 
 **Responsibility**: Plant disease detection and analysis
 

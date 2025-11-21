@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
-from app.controllers import product_controller
+from app.controllers import product_controller_FINAL as product_controller
 from typing import Optional
 
 router = APIRouter(prefix="/products", tags=["Products"])
