@@ -1,12 +1,15 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
+from sqlalchemy.orm import Session
+from app.config.db import get_db
 from app.controllers import product_controller_FINAL as product_controller
 from typing import Optional
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
 @router.get("/")
-def get_products():
-    products = product_controller.get_all_products()
+def get_products(db: Session = Depends(get_db)):
+    """Get all products from database"""
+    products = product_controller.get_all_products(db)
     if not products:
         raise HTTPException(status_code=404, detail="No products found")
     return products
@@ -14,7 +17,7 @@ def get_products():
 @router.get("/by-scientific-name/{disease_scientific_name}")
 def get_products_by_scientific_name(
     disease_scientific_name: str,
-    plant_scientific_name: Optional[str] = Query(None)  # ✅ FIXED: Made optional with Query
+    plant_scientific_name: Optional[str] = Query(None)
 ):
     """
     Get products by disease scientific name, optionally filtered by plant.
@@ -36,8 +39,9 @@ def get_products_by_scientific_name(
     return products
 
 @router.get("/by-disease/{disease_name}")
-def get_products_by_disease(disease_name: str):
-    products = product_controller.get_products_by_disease(disease_name)
+def get_products_by_disease(disease_name: str, db: Session = Depends(get_db)):
+    """Get products by disease name"""
+    products = product_controller.get_products_by_disease(disease_name, db)
     if not products:
         raise HTTPException(status_code=404, detail="No products found for this disease")
     return products
