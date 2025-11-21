@@ -43,9 +43,10 @@ async def handle_analyze(
     background_tasks: BackgroundTasks = None
 ):
     """
-    UPDATED VERSION: Returns fake plant data when detection fails
-    - This triggers the "10 Plants" modal in frontend
-    - No HTTP exceptions for detection failures
+    FINAL VERSION: Multi-image analysis with product matching
+    - All images analyzed by AI
+    - All images uploaded to S3
+    - Fuzzy matching to find product recommendation
     """
     start_time = time.time()
 
@@ -80,41 +81,8 @@ async def handle_analyze(
     try:
         diagnosis = await analyze_images(image_bytes_list)
 
-        # Check if analysis failed (no plant detected, low confidence, etc.)
         if not diagnosis.get("success"):
-            print(f"⚠️  Detection failed: {diagnosis.get('error')}")
-            print(f"⚠️  Returning fake plant to trigger '10 Plants' modal")
-            
-            # Return a fake plant that's NOT in the allowed list
-            # This will trigger the "10 Plants" modal in frontend
-            total_time = round(time.time() - start_time, 2)
-            
-            fake_response = {
-                "data": {
-                    "detection_id": str(uuid4()),
-                    "scientific_name": "Unknown plant species",  # Not in allowed list
-                    "common_name": "Unknown Plant",
-                    "plant_confidence": 0.0,
-                    "disease": ["Unable to identify"],
-                    "disease_scientific_name": None,
-                    "disease_confidence": 0.0,
-                    "diagnosis_type": "unknown",
-                    "symptoms": ["Plant not identified"],
-                    "cause": ["Image quality or plant not in database"],
-                    "treatment": ["Please upload clearer images"],
-                    "prevention": ["Ensure good lighting and clear plant visibility"],
-                    "image_urls": [],
-                    "images_uploaded": 0,
-                    "recommended_product": None,
-                    "yolo_time": 0.0,
-                    "openai_time": 0.0,
-                    "total_time": total_time,
-                    "error_reason": diagnosis.get("error", "Unable to identify plant")
-                }
-            }
-            
-            print(f"✅ Returning fake response to trigger modal")
-            return fake_response
+            raise HTTPException(status_code=400, detail=diagnosis.get("error", "Analysis failed"))
 
         print(f"✅ Diagnosis complete:")
         print(f"  Plant: {diagnosis.get('plant_common_name')} ({diagnosis.get('plant_scientific_name')})")
@@ -123,34 +91,7 @@ async def handle_analyze(
 
     except Exception as e:
         print(f"❌ AI Analysis failed: {e}")
-        # Return fake plant instead of raising exception
-        total_time = round(time.time() - start_time, 2)
-        
-        fake_response = {
-            "data": {
-                "detection_id": str(uuid4()),
-                "scientific_name": "Unknown plant species",
-                "common_name": "Unknown Plant",
-                "plant_confidence": 0.0,
-                "disease": ["System error"],
-                "disease_scientific_name": None,
-                "disease_confidence": 0.0,
-                "diagnosis_type": "error",
-                "symptoms": ["Analysis failed"],
-                "cause": ["System error occurred"],
-                "treatment": ["Please try again"],
-                "prevention": ["Contact support if issue persists"],
-                "image_urls": [],
-                "images_uploaded": 0,
-                "recommended_product": None,
-                "yolo_time": 0.0,
-                "openai_time": 0.0,
-                "total_time": total_time,
-                "error_reason": str(e)
-            }
-        }
-        
-        return fake_response
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
     # Step 4: Upload ALL images to S3 in parallel
     print(f"\n☁️  Uploading {len(image_bytes_list)} images to S3...")
@@ -217,43 +158,36 @@ async def handle_analyze(
         background_tasks.add_task(save_to_database_background, db, detection_data)
         print(f"📝 Database save scheduled (background)")
 
-    # Step 8: Build response - FLATTENED structure wrapped in 'data' key
+    # Step 8: Build response
     total_time = round(time.time() - start_time, 2)
 
-    # Ensure disease and cause are lists
-    disease_value = diagnosis.get("disease")
-    if not isinstance(disease_value, list):
-        disease_value = [disease_value] if disease_value else []
-    
-    cause_value = diagnosis.get("cause")
-    if not isinstance(cause_value, list):
-        cause_value = [cause_value] if cause_value else []
-
-    # Flatten structure to match frontend expectations
-    flattened_data = {
-        "detection_id": detection_id,
-        "scientific_name": diagnosis.get("plant_scientific_name"),
-        "common_name": diagnosis.get("plant_common_name"),
-        "plant_confidence": diagnosis.get("plant_confidence"),
-        "disease": disease_value,
-        "disease_scientific_name": diagnosis.get("disease_scientific_name"),
-        "disease_confidence": diagnosis.get("disease_confidence"),
-        "diagnosis_type": diagnosis.get("diagnosis_type"),
-        "symptoms": diagnosis.get("symptoms", []),
-        "cause": cause_value,
-        "treatment": diagnosis.get("treatment", []),
-        "prevention": diagnosis.get("prevention", []),
-        "image_urls": s3_urls,
-        "images_uploaded": len(s3_urls),
-        "recommended_product": matched_product,
-        "yolo_time": diagnosis.get("yolo_time"),
-        "openai_time": diagnosis.get("openai_time"),
-        "total_time": total_time
-    }
-
-    # Wrap in 'data' key to match frontend's response.data.data access pattern
     response = {
-        "data": flattened_data
+        "detection_id": detection_id,
+        "plant": {
+            "common_name": diagnosis.get("plant_common_name"),
+            "scientific_name": diagnosis.get("plant_scientific_name"),
+            "confidence": diagnosis.get("plant_confidence")
+        },
+        "diagnosis": {
+            "disease": diagnosis.get("disease"),
+            "disease_scientific_name": diagnosis.get("disease_scientific_name"),
+            "confidence": diagnosis.get("disease_confidence"),
+            "type": diagnosis.get("diagnosis_type"),
+            "symptoms": diagnosis.get("symptoms", []),
+            "cause": diagnosis.get("cause"),
+            "treatment": diagnosis.get("treatment", []),
+            "prevention": diagnosis.get("prevention", [])
+        },
+        "images": {
+            "uploaded": len(s3_urls),
+            "urls": s3_urls
+        },
+        "recommended_product": matched_product,  # Append product recommendation
+        "timing": {
+            "yolo_time": diagnosis.get("yolo_time"),
+            "openai_time": diagnosis.get("openai_time"),
+            "total_time": total_time
+        }
     }
 
     print(f"\n✅ REQUEST COMPLETE - Total time: {total_time}s")

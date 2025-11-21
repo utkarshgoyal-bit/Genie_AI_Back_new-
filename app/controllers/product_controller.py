@@ -72,7 +72,7 @@ def get_products_by_scientific_name(disease_scientific_name: str, plant_scientif
 def get_products_by_disease(disease_name: str, db: Session = Depends(get_db)):
     try:
         safe_disease_name = disease_name.replace('%', '\\%').replace('_', '\\_')
-        products = db.query(Product).filter(Product.disease.ilike(f"%{safe_disease_name}%")).all()
+        products = db.query(Product).filter(Product.disease_common_name.ilike(f"%{safe_disease_name}%")).all()
         return [p.to_dict() for p in products]
     except Exception as e:
         logger.error(f"Error fetching products by disease '{disease_name}': {e}", exc_info=True)

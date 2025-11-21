@@ -6,7 +6,7 @@ import time
 import openai
 from pathlib import Path
 from dotenv import load_dotenv
-from .image_utils import optimize_image, detect_image_type
+from .image_utils import optimize_image, select_best_image, detect_image_type
 
 env_path = Path(__file__).parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -23,9 +23,9 @@ except Exception as e:
     raise RuntimeError(f"Failed to load YOLO model: {e}")
 
 api_key = os.getenv("OPENAI_API_KEY")
-print(f"🔑 API Key found: {api_key is not None}")
+print(f"🔍 API Key found: {api_key is not None}")
 if api_key:
-    print(f"🔑 API Key starts with: {api_key[:15]}...")
+    print(f"🔍 API Key starts with: {api_key[:15]}...")
 if not api_key:
     raise RuntimeError("OPENAI_API_KEY environment variable required")
 
@@ -34,14 +34,14 @@ print("✅ OpenAI client initialized")
 
 async def analyze_images(images: list[bytes]) -> dict:
     """
-    IMPROVED VERSION: 
-    - Always uses Image 2 (close-up/problem area) for YOLO detection
-    - Handles non-plant images gracefully
-    - Returns proper error for plants outside MVP scope
+    FINAL VERSION: Diagnostic Funnel approach with multi-image analysis
+    - Uses all provided images for comprehensive diagnosis
+    - Outputs both scientific and common names
+    - Includes disease field for fuzzy matching
     """
     start_time = time.time()
 
-    # Step 1: Optimize all images
+    # Step 1: Smart image selection and optimization
     print(f"📸 Processing {len(images)} images...")
 
     optimized_images = []
@@ -51,20 +51,14 @@ async def analyze_images(images: list[bytes]) -> dict:
         optimized_images.append(optimized)
         print(f"  ✓ Image {idx+1}: {img_type}, reduced {len(img_bytes)} → {len(optimized)} bytes")
 
-    # Step 2: Always use Image 2 (close-up/problem area) for YOLO detection
-    if len(optimized_images) >= 2:
-        yolo_image = optimized_images[1]  # Always use second image (index 1)
-        selected_idx = 1
-        print(f"🎯 Using Image 2 (close-up/problem area) for YOLO detection")
-    else:
-        yolo_image = optimized_images[0]  # Fallback if only 1 image
-        selected_idx = 0
-        print(f"⚠️  Only 1 image provided, using it for YOLO detection")
+    # Use best image for YOLO detection
+    best_image = select_best_image(optimized_images)
+    print(f"🎯 Selected best image for YOLO detection")
 
-    # Step 3: YOLO Detection
+    # Step 2: YOLO Detection
     print("🔍 Running YOLO plant detection...")
     with open("/tmp/temp_detect.jpg", "wb") as f:
-        f.write(yolo_image)
+        f.write(best_image)
 
     yolo_results = model("/tmp/temp_detect.jpg", verbose=False)
     detections = yolo_results[0].boxes
@@ -72,8 +66,7 @@ async def analyze_images(images: list[bytes]) -> dict:
     if len(detections) == 0:
         return {
             "success": False,
-            "error": "No plant detected in the images. Please ensure both images clearly show the plant.",
-            "error_type": "no_detection",
+            "error": "No plant detected in image",
             "yolo_time": round(time.time() - start_time, 2)
         }
 
@@ -86,19 +79,7 @@ async def analyze_images(images: list[bytes]) -> dict:
     class_name = model.names[plant_class_id]
     print(f"✅ YOLO detected: {class_name} ({plant_confidence:.2%} confidence)")
 
-    # Check if confidence is too low (likely wrong detection)
-    if plant_confidence < 0.60:  # 60% threshold
-        print(f"⚠️  Low confidence detection ({plant_confidence:.2%}) - likely not a plant")
-        return {
-            "success": False,
-            "error": "Unable to clearly identify the plant. Please upload clearer images showing the entire plant and affected areas.",
-            "error_type": "low_confidence",
-            "detected_class": class_name,
-            "confidence": plant_confidence,
-            "yolo_time": round(time.time() - start_time, 2)
-        }
-
-    # Step 4: Prepare all images for OpenAI analysis
+    # Step 3: Prepare all images for OpenAI analysis
     print(f"🤖 Sending {len(optimized_images)} images to OpenAI for diagnosis...")
 
     image_contents = []
@@ -109,7 +90,7 @@ async def analyze_images(images: list[bytes]) -> dict:
             "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
         })
 
-    # Step 5: Diagnostic Funnel Prompt
+    # Step 4: Diagnostic Funnel Prompt
     prompt = f"""You are an expert plant pathologist. Analyze ALL provided images of this {class_name} plant.
 
 DIAGNOSTIC FUNNEL (check in this order):
@@ -120,9 +101,6 @@ DIAGNOSTIC FUNNEL (check in this order):
 5. Care Recommendations: Specific, actionable steps
 
 CRITICAL: Prioritize environmental/cultural issues over diseases. Most problems are abiotic.
-
-IMPORTANT: If you cannot identify a plant in the images, return this exact JSON:
-{{"error": "no_plant_found", "message": "Unable to identify plant in images"}}
 
 Output strict JSON (no markdown):
 {{
@@ -141,7 +119,7 @@ Output strict JSON (no markdown):
 
 Be concise. No filler. Evidence-based only."""
 
-    # Step 6: OpenAI API Call
+    # Step 5: OpenAI API Call
     openai_start = time.time()
 
     try:
@@ -159,40 +137,14 @@ Be concise. No filler. Evidence-based only."""
         print(f"✅ OpenAI response received ({openai_time}s)")
 
         raw_response = response.choices[0].message.content.strip()
-        print(f"📝 Raw OpenAI response: {raw_response[:200]}...")  # Log first 200 chars
 
         # Parse JSON (handle markdown code blocks)
         if raw_response.startswith("```"):
             raw_response = raw_response.split("```")[1]
             if raw_response.startswith("json"):
                 raw_response = raw_response[4:]
-        
-        raw_response = raw_response.strip()
 
-        # Try to parse JSON
-        try:
-            diagnosis = json.loads(raw_response)
-        except json.JSONDecodeError:
-            # OpenAI returned plain text (couldn't identify plant)
-            print(f"⚠️  OpenAI returned non-JSON response (likely no plant found)")
-            return {
-                "success": False,
-                "error": "Unable to identify a plant in the provided images. Please ensure images clearly show the plant.",
-                "error_type": "no_plant_identified",
-                "openai_response": raw_response[:200],  # First 200 chars for debugging
-                "yolo_time": round(time.time() - start_time - openai_time, 2),
-                "openai_time": openai_time
-            }
-
-        # Check if OpenAI returned an error response
-        if "error" in diagnosis and diagnosis.get("error") == "no_plant_found":
-            return {
-                "success": False,
-                "error": diagnosis.get("message", "Unable to identify plant in images"),
-                "error_type": "no_plant_identified",
-                "yolo_time": round(time.time() - start_time - openai_time, 2),
-                "openai_time": openai_time
-            }
+        diagnosis = json.loads(raw_response.strip())
 
         # Add metadata
         diagnosis["success"] = True
@@ -200,13 +152,8 @@ Be concise. No filler. Evidence-based only."""
         diagnosis["openai_time"] = openai_time
         diagnosis["total_time"] = round(time.time() - start_time, 2)
         diagnosis["images_analyzed"] = len(images)
-        diagnosis["yolo_image_used"] = selected_idx + 1  # 1-indexed for clarity
 
         print(f"✅ Total analysis time: {diagnosis['total_time']}s")
-        print(f"✅ Diagnosis complete:")
-        print(f"  Plant: {diagnosis.get('plant_common_name')} ({diagnosis.get('plant_scientific_name')})")
-        print(f"  Issue: {diagnosis.get('disease')}")
-        
         return diagnosis
 
     except json.JSONDecodeError as e:
@@ -214,14 +161,12 @@ Be concise. No filler. Evidence-based only."""
         print(f"Raw response: {raw_response}")
         return {
             "success": False,
-            "error": "Failed to get a valid diagnosis. Please try again with clearer images.",
-            "error_type": "parse_error",
-            "raw_response": raw_response[:200]
+            "error": "Failed to parse AI response",
+            "raw_response": raw_response
         }
     except Exception as e:
         print(f"❌ OpenAI API Error: {e}")
         return {
             "success": False,
-            "error": f"Analysis service error: {str(e)}",
-            "error_type": "api_error"
+            "error": str(e)
         }
