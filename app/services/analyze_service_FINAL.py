@@ -34,10 +34,10 @@ print("✅ OpenAI client initialized")
 
 async def analyze_images(images: list[bytes]) -> dict:
     """
-    UPDATED VERSION: Always uses Image 2 (close-up/problem area) for YOLO detection
-    - Image 1: Full plant view (for context in OpenAI)
-    - Image 2: Close-up/problem area (used for YOLO detection)
-    - Both images sent to OpenAI for comprehensive diagnosis
+    IMPROVED VERSION: 
+    - Always uses Image 2 (close-up/problem area) for YOLO detection
+    - Handles non-plant images gracefully
+    - Returns proper error for plants outside MVP scope
     """
     start_time = time.time()
 
@@ -51,8 +51,7 @@ async def analyze_images(images: list[bytes]) -> dict:
         optimized_images.append(optimized)
         print(f"  ✓ Image {idx+1}: {img_type}, reduced {len(img_bytes)} → {len(optimized)} bytes")
 
-    # Step 2: Select Image 2 (close-up/problem area) for YOLO detection
-    # Image order by design: [0]=full plant, [1]=close-up problem area
+    # Step 2: Always use Image 2 (close-up/problem area) for YOLO detection
     if len(optimized_images) >= 2:
         yolo_image = optimized_images[1]  # Always use second image (index 1)
         selected_idx = 1
@@ -73,7 +72,8 @@ async def analyze_images(images: list[bytes]) -> dict:
     if len(detections) == 0:
         return {
             "success": False,
-            "error": "No plant detected in image",
+            "error": "No plant detected in the images. Please ensure both images clearly show the plant.",
+            "error_type": "no_detection",
             "yolo_time": round(time.time() - start_time, 2)
         }
 
@@ -85,6 +85,18 @@ async def analyze_images(images: list[bytes]) -> dict:
 
     class_name = model.names[plant_class_id]
     print(f"✅ YOLO detected: {class_name} ({plant_confidence:.2%} confidence)")
+
+    # Check if confidence is too low (likely wrong detection)
+    if plant_confidence < 0.60:  # 60% threshold
+        print(f"⚠️  Low confidence detection ({plant_confidence:.2%}) - likely not a plant")
+        return {
+            "success": False,
+            "error": "Unable to clearly identify the plant. Please upload clearer images showing the entire plant and affected areas.",
+            "error_type": "low_confidence",
+            "detected_class": class_name,
+            "confidence": plant_confidence,
+            "yolo_time": round(time.time() - start_time, 2)
+        }
 
     # Step 4: Prepare all images for OpenAI analysis
     print(f"🤖 Sending {len(optimized_images)} images to OpenAI for diagnosis...")
@@ -108,6 +120,9 @@ DIAGNOSTIC FUNNEL (check in this order):
 5. Care Recommendations: Specific, actionable steps
 
 CRITICAL: Prioritize environmental/cultural issues over diseases. Most problems are abiotic.
+
+IMPORTANT: If you cannot identify a plant in the images, return this exact JSON:
+{{"error": "no_plant_found", "message": "Unable to identify plant in images"}}
 
 Output strict JSON (no markdown):
 {{
@@ -144,14 +159,40 @@ Be concise. No filler. Evidence-based only."""
         print(f"✅ OpenAI response received ({openai_time}s)")
 
         raw_response = response.choices[0].message.content.strip()
+        print(f"📝 Raw OpenAI response: {raw_response[:200]}...")  # Log first 200 chars
 
         # Parse JSON (handle markdown code blocks)
         if raw_response.startswith("```"):
             raw_response = raw_response.split("```")[1]
             if raw_response.startswith("json"):
                 raw_response = raw_response[4:]
+        
+        raw_response = raw_response.strip()
 
-        diagnosis = json.loads(raw_response.strip())
+        # Try to parse JSON
+        try:
+            diagnosis = json.loads(raw_response)
+        except json.JSONDecodeError:
+            # OpenAI returned plain text (couldn't identify plant)
+            print(f"⚠️  OpenAI returned non-JSON response (likely no plant found)")
+            return {
+                "success": False,
+                "error": "Unable to identify a plant in the provided images. Please ensure images clearly show the plant.",
+                "error_type": "no_plant_identified",
+                "openai_response": raw_response[:200],  # First 200 chars for debugging
+                "yolo_time": round(time.time() - start_time - openai_time, 2),
+                "openai_time": openai_time
+            }
+
+        # Check if OpenAI returned an error response
+        if "error" in diagnosis and diagnosis.get("error") == "no_plant_found":
+            return {
+                "success": False,
+                "error": diagnosis.get("message", "Unable to identify plant in images"),
+                "error_type": "no_plant_identified",
+                "yolo_time": round(time.time() - start_time - openai_time, 2),
+                "openai_time": openai_time
+            }
 
         # Add metadata
         diagnosis["success"] = True
@@ -162,6 +203,10 @@ Be concise. No filler. Evidence-based only."""
         diagnosis["yolo_image_used"] = selected_idx + 1  # 1-indexed for clarity
 
         print(f"✅ Total analysis time: {diagnosis['total_time']}s")
+        print(f"✅ Diagnosis complete:")
+        print(f"  Plant: {diagnosis.get('plant_common_name')} ({diagnosis.get('plant_scientific_name')})")
+        print(f"  Issue: {diagnosis.get('disease')}")
+        
         return diagnosis
 
     except json.JSONDecodeError as e:
@@ -169,12 +214,14 @@ Be concise. No filler. Evidence-based only."""
         print(f"Raw response: {raw_response}")
         return {
             "success": False,
-            "error": "Failed to parse AI response",
-            "raw_response": raw_response
+            "error": "Failed to get a valid diagnosis. Please try again with clearer images.",
+            "error_type": "parse_error",
+            "raw_response": raw_response[:200]
         }
     except Exception as e:
         print(f"❌ OpenAI API Error: {e}")
         return {
             "success": False,
-            "error": str(e)
+            "error": f"Analysis service error: {str(e)}",
+            "error_type": "api_error"
         }
