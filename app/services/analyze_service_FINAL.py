@@ -4,10 +4,9 @@ import base64
 import json
 import time
 import openai
-import tempfile
 from pathlib import Path
 from dotenv import load_dotenv
-from .image_utils import optimize_image, select_best_image, detect_image_type
+from .image_utils import optimize_image, detect_image_type
 
 env_path = Path(__file__).parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -35,15 +34,14 @@ print("✅ OpenAI client initialized")
 
 async def analyze_images(images: list[bytes]) -> dict:
     """
-    FINAL VERSION: Diagnostic Funnel approach with multi-image analysis
-    - Uses all provided images for comprehensive diagnosis
-    - Outputs both scientific and common names
-    - Includes disease field for fuzzy matching
+    UPDATED VERSION: Always uses Image 2 (close-up/problem area) for YOLO detection
+    - Image 1: Full plant view (for context in OpenAI)
+    - Image 2: Close-up/problem area (used for YOLO detection)
+    - Both images sent to OpenAI for comprehensive diagnosis
     """
     start_time = time.time()
 
-    # Step 1: Smart image selection and optimization
-    # Step 1: Smart image selection and optimization
+    # Step 1: Optimize all images
     print(f"📸 Processing {len(images)} images...")
 
     optimized_images = []
@@ -53,28 +51,24 @@ async def analyze_images(images: list[bytes]) -> dict:
         optimized_images.append(optimized)
         print(f"  ✓ Image {idx+1}: {img_type}, reduced {len(img_bytes)} → {len(optimized)} bytes")
 
-    # Use best image for YOLO detection
-    best_image, best_image_type, best_idx = select_best_image(optimized_images)
-    print(f"🎯 Selected image {best_idx+1} ({best_image_type}) for YOLO detection")
+    # Step 2: Select Image 2 (close-up/problem area) for YOLO detection
+    # Image order by design: [0]=full plant, [1]=close-up problem area
+    if len(optimized_images) >= 2:
+        yolo_image = optimized_images[1]  # Always use second image (index 1)
+        selected_idx = 1
+        print(f"🎯 Using Image 2 (close-up/problem area) for YOLO detection")
+    else:
+        yolo_image = optimized_images[0]  # Fallback if only 1 image
+        selected_idx = 0
+        print(f"⚠️  Only 1 image provided, using it for YOLO detection")
 
-    # Step 2: YOLO Detection - FIXED FOR CROSS-PLATFORM
+    # Step 3: YOLO Detection
     print("🔍 Running YOLO plant detection...")
-    
-    # Create temp file with proper path for Windows/Linux/Mac
-    temp_dir = tempfile.gettempdir()
-    temp_path = os.path.join(temp_dir, "temp_detect.jpg")
-    
-    with open(temp_path, "wb") as f:
-        f.write(best_image)
+    with open("/tmp/temp_detect.jpg", "wb") as f:
+        f.write(yolo_image)
 
-    yolo_results = model(temp_path, verbose=False)
+    yolo_results = model("/tmp/temp_detect.jpg", verbose=False)
     detections = yolo_results[0].boxes
-
-    # Clean up temp file
-    try:
-        os.remove(temp_path)
-    except:
-        pass
 
     if len(detections) == 0:
         return {
@@ -92,7 +86,7 @@ async def analyze_images(images: list[bytes]) -> dict:
     class_name = model.names[plant_class_id]
     print(f"✅ YOLO detected: {class_name} ({plant_confidence:.2%} confidence)")
 
-    # Step 3: Prepare all images for OpenAI analysis
+    # Step 4: Prepare all images for OpenAI analysis
     print(f"🤖 Sending {len(optimized_images)} images to OpenAI for diagnosis...")
 
     image_contents = []
@@ -103,7 +97,7 @@ async def analyze_images(images: list[bytes]) -> dict:
             "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
         })
 
-    # Step 4: Diagnostic Funnel Prompt
+    # Step 5: Diagnostic Funnel Prompt
     prompt = f"""You are an expert plant pathologist. Analyze ALL provided images of this {class_name} plant.
 
 DIAGNOSTIC FUNNEL (check in this order):
@@ -132,7 +126,7 @@ Output strict JSON (no markdown):
 
 Be concise. No filler. Evidence-based only."""
 
-    # Step 5: OpenAI API Call
+    # Step 6: OpenAI API Call
     openai_start = time.time()
 
     try:
@@ -165,6 +159,7 @@ Be concise. No filler. Evidence-based only."""
         diagnosis["openai_time"] = openai_time
         diagnosis["total_time"] = round(time.time() - start_time, 2)
         diagnosis["images_analyzed"] = len(images)
+        diagnosis["yolo_image_used"] = selected_idx + 1  # 1-indexed for clarity
 
         print(f"✅ Total analysis time: {diagnosis['total_time']}s")
         return diagnosis
