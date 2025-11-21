@@ -4,6 +4,7 @@ import base64
 import json
 import time
 import openai
+import tempfile
 from pathlib import Path
 from dotenv import load_dotenv
 from .image_utils import optimize_image, select_best_image, detect_image_type
@@ -23,9 +24,9 @@ except Exception as e:
     raise RuntimeError(f"Failed to load YOLO model: {e}")
 
 api_key = os.getenv("OPENAI_API_KEY")
-print(f"🔍 API Key found: {api_key is not None}")
+print(f"🔑 API Key found: {api_key is not None}")
 if api_key:
-    print(f"🔍 API Key starts with: {api_key[:15]}...")
+    print(f"🔑 API Key starts with: {api_key[:15]}...")
 if not api_key:
     raise RuntimeError("OPENAI_API_KEY environment variable required")
 
@@ -42,6 +43,7 @@ async def analyze_images(images: list[bytes]) -> dict:
     start_time = time.time()
 
     # Step 1: Smart image selection and optimization
+    # Step 1: Smart image selection and optimization
     print(f"📸 Processing {len(images)} images...")
 
     optimized_images = []
@@ -52,16 +54,27 @@ async def analyze_images(images: list[bytes]) -> dict:
         print(f"  ✓ Image {idx+1}: {img_type}, reduced {len(img_bytes)} → {len(optimized)} bytes")
 
     # Use best image for YOLO detection
-    best_image = select_best_image(optimized_images)
-    print(f"🎯 Selected best image for YOLO detection")
+    best_image, best_image_type, best_idx = select_best_image(optimized_images)
+    print(f"🎯 Selected image {best_idx+1} ({best_image_type}) for YOLO detection")
 
-    # Step 2: YOLO Detection
+    # Step 2: YOLO Detection - FIXED FOR CROSS-PLATFORM
     print("🔍 Running YOLO plant detection...")
-    with open("/tmp/temp_detect.jpg", "wb") as f:
+    
+    # Create temp file with proper path for Windows/Linux/Mac
+    temp_dir = tempfile.gettempdir()
+    temp_path = os.path.join(temp_dir, "temp_detect.jpg")
+    
+    with open(temp_path, "wb") as f:
         f.write(best_image)
 
-    yolo_results = model("/tmp/temp_detect.jpg", verbose=False)
+    yolo_results = model(temp_path, verbose=False)
     detections = yolo_results[0].boxes
+
+    # Clean up temp file
+    try:
+        os.remove(temp_path)
+    except:
+        pass
 
     if len(detections) == 0:
         return {
