@@ -47,6 +47,7 @@ async def handle_analyze(
     - All images analyzed by AI
     - All images uploaded to S3
     - Fuzzy matching to find product recommendation
+    - Response flattened and wrapped in 'data' key for frontend compatibility
     """
     start_time = time.time()
 
@@ -134,23 +135,23 @@ async def handle_analyze(
         print(f"⚠️  Product matching failed: {e}")
         matched_product = None
 
-   # Step 6: Prepare database record
+    # Step 6: Prepare database record
     detection_data = {
+        "id": detection_id,
         "mobile": mobile,
         "common_name": diagnosis.get("plant_common_name"),
         "scientific_name": diagnosis.get("plant_scientific_name"),
-        "plant_confidence": f"{diagnosis.get('plant_confidence', 0) * 100:.0f}%",  # Format as "90%"
-        "disease": [diagnosis.get("disease")],  # Wrap in array for JSON column
-        "disease_scientific_name": [diagnosis.get("disease_scientific_name")],  # Wrap in array
-        "disease_confidence": [diagnosis.get("disease_confidence")],  # Wrap in array
-        "diagnosis_type": diagnosis.get("diagnosis_type"),  # NEW
-        "symptoms": diagnosis.get("symptoms", []),
-        "cause": [diagnosis.get("cause")],  # Wrap in array for JSON column
-        "treatment": diagnosis.get("treatment", []),
-        "prevention": diagnosis.get("prevention", []),  # NEW
-        "image": s3_urls[0] if s3_urls else None,  # First image for backward compatibility
-        "image_urls": s3_urls,  # NEW: All images
-        "images_analyzed": len(image_bytes_list)  # NEW
+        "plant_confidence": diagnosis.get("plant_confidence"),
+        "disease": diagnosis.get("disease"),
+        "disease_scientific_name": diagnosis.get("disease_scientific_name"),
+        "disease_confidence": diagnosis.get("disease_confidence"),
+        "diagnosis_type": diagnosis.get("diagnosis_type"),
+        "symptoms": json.dumps(diagnosis.get("symptoms", [])),
+        "cause": diagnosis.get("cause"),
+        "treatment": json.dumps(diagnosis.get("treatment", [])),
+        "prevention": json.dumps(diagnosis.get("prevention", [])),
+        "image_urls": json.dumps(s3_urls),  # Store all image URLs
+        "images_analyzed": len(image_bytes_list)
     }
 
     # Step 7: Save to database (background)
@@ -158,29 +159,44 @@ async def handle_analyze(
         background_tasks.add_task(save_to_database_background, db, detection_data)
         print(f"📝 Database save scheduled (background)")
 
-    # Step 8: Build response
+    # Step 8: Build response - FLATTENED structure wrapped in 'data' key
     total_time = round(time.time() - start_time, 2)
 
+    # Ensure disease and cause are lists
+    disease_value = diagnosis.get("disease")
+    if not isinstance(disease_value, list):
+        disease_value = [disease_value] if disease_value else []
+    
+    cause_value = diagnosis.get("cause")
+    if not isinstance(cause_value, list):
+        cause_value = [cause_value] if cause_value else []
+
+    # Flatten structure to match frontend expectations
+    flattened_data = {
+        "detection_id": detection_id,
+        "scientific_name": diagnosis.get("plant_scientific_name"),
+        "common_name": diagnosis.get("plant_common_name"),
+        "plant_confidence": diagnosis.get("plant_confidence"),
+        "disease": disease_value,
+        "disease_scientific_name": diagnosis.get("disease_scientific_name"),
+        "disease_confidence": diagnosis.get("disease_confidence"),
+        "diagnosis_type": diagnosis.get("diagnosis_type"),
+        "symptoms": diagnosis.get("symptoms", []),
+        "cause": cause_value,
+        "treatment": diagnosis.get("treatment", []),
+        "prevention": diagnosis.get("prevention", []),
+        "image_urls": s3_urls,
+        "images_uploaded": len(s3_urls),
+        "recommended_product": matched_product,
+        "yolo_time": diagnosis.get("yolo_time"),
+        "openai_time": diagnosis.get("openai_time"),
+        "total_time": total_time
+    }
+
+    # Wrap in 'data' key to match frontend's response.data.data access pattern
     response = {
-    "detection_id": detection_id,
-    "common_name": diagnosis.get("plant_common_name"),
-    "scientific_name": diagnosis.get("plant_scientific_name"),
-    "plant_confidence": diagnosis.get("plant_confidence"),
-    "disease": diagnosis.get("disease"),
-    "disease_scientific_name": diagnosis.get("disease_scientific_name"),
-    "disease_confidence": diagnosis.get("disease_confidence"),
-    "diagnosis_type": diagnosis.get("diagnosis_type"),
-    "symptoms": diagnosis.get("symptoms", []),
-    "cause": diagnosis.get("cause"),
-    "treatment": diagnosis.get("treatment", []),
-    "prevention": diagnosis.get("prevention", []),
-    "image_urls": s3_urls,
-    "images_uploaded": len(s3_urls),
-    "recommended_product": matched_product,
-    "yolo_time": diagnosis.get("yolo_time"),
-    "openai_time": diagnosis.get("openai_time"),
-    "total_time": total_time
-}
+        "data": flattened_data
+    }
 
     print(f"\n✅ REQUEST COMPLETE - Total time: {total_time}s")
     print(f"{'='*60}\n")
