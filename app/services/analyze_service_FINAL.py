@@ -170,3 +170,115 @@ Be concise. No filler. Evidence-based only."""
             "success": False,
             "error": str(e)
         }
+async def analyze_images_direct(images: list[bytes]) -> dict:
+    """
+    DIRECT VERSION: Skips YOLO detection, OpenAI identifies plant + diagnoses.
+    Used for /analyze/direct endpoint (no authentication required).
+    """
+    start_time = time.time()
+
+    # Step 1: Optimize all images
+    print(f"📸 Processing {len(images)} images (direct mode)...")
+
+    optimized_images = []
+    for idx, img_bytes in enumerate(images):
+        img_type = detect_image_type(img_bytes)
+        optimized = optimize_image(img_bytes, img_type)
+        optimized_images.append(optimized)
+        print(f"  ✓ Image {idx+1}: {img_type}, reduced {len(img_bytes)} → {len(optimized)} bytes")
+
+    # Step 2: Prepare all images for OpenAI analysis
+    print(f"🤖 Sending {len(optimized_images)} images to OpenAI (direct analysis)...")
+
+    image_contents = []
+    for idx, img_bytes in enumerate(optimized_images):
+        base64_image = base64.b64encode(img_bytes).decode("utf-8")
+        image_contents.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+        })
+
+    # Step 3: Prompt for OpenAI (must identify plant + diagnose)
+    prompt = """You are an expert plant pathologist. Analyze ALL provided images.
+
+TASK: First IDENTIFY the plant, then DIAGNOSE any issues.
+
+DIAGNOSTIC FUNNEL (check in this order):
+1. Plant Identification: Determine species (scientific + common name) from visual features
+2. Holistic Assessment: Overall health, growth stage, environment clues
+3. Abiotic Stress FIRST: Check water, light, nutrients, temperature
+4. Biotic Issues: Only if abiotic factors ruled out - fungal, bacterial, pest
+5. Care Recommendations: Specific, actionable steps
+
+CRITICAL: Prioritize environmental/cultural issues over diseases. Most problems are abiotic.
+
+Output strict JSON (no markdown):
+{
+  "plant_scientific_name": "Genus species",
+  "plant_common_name": "Common name",
+  "plant_confidence": 0.0-1.0,
+  "disease": "Specific issue name (e.g., Nitrogen Deficiency, Black Spot, Healthy)",
+  "disease_scientific_name": "Scientific pathogen name if biotic, otherwise null",
+  "disease_confidence": 0.0-1.0,
+  "diagnosis_type": "abiotic|biotic|healthy",
+  "symptoms": ["concise", "observed", "symptoms"],
+  "cause": "Root cause explanation",
+  "treatment": ["actionable", "prioritized", "steps"],
+  "prevention": ["future", "care", "tips"]
+}
+
+If you cannot identify the plant, use "Unknown" for names and 0.0 for plant_confidence.
+Be concise. No filler. Evidence-based only."""
+
+    # Step 4: OpenAI API Call
+    openai_start = time.time()
+
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{
+                "role": "user",
+                "content": [{"type": "text", "text": prompt}] + image_contents
+            }],
+            max_tokens=MAX_TOKENS,
+            temperature=TEMPERATURE
+        )
+
+        openai_time = round(time.time() - openai_start, 2)
+        print(f"✅ OpenAI response received ({openai_time}s)")
+
+        raw_response = response.choices[0].message.content.strip()
+
+        # Parse JSON (handle markdown code blocks)
+        if raw_response.startswith("```"):
+            raw_response = raw_response.split("```")[1]
+            if raw_response.startswith("json"):
+                raw_response = raw_response[4:]
+
+        diagnosis = json.loads(raw_response.strip())
+
+        # Add metadata
+        diagnosis["success"] = True
+        diagnosis["yolo_time"] = 0  # No YOLO in direct mode
+        diagnosis["openai_time"] = openai_time
+        diagnosis["total_time"] = round(time.time() - start_time, 2)
+        diagnosis["images_analyzed"] = len(images)
+        diagnosis["mode"] = "direct"  # Flag to indicate direct mode
+
+        print(f"✅ Total analysis time: {diagnosis['total_time']}s")
+        return diagnosis
+
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON Parse Error: {e}")
+        print(f"Raw response: {raw_response}")
+        return {
+            "success": False,
+            "error": "Failed to parse AI response",
+            "raw_response": raw_response
+        }
+    except Exception as e:
+        print(f"❌ OpenAI API Error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }

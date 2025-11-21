@@ -161,7 +161,16 @@ def find_product_by_diagnosis(
 def get_all_products(db: Session = Depends(get_db)):
     try:
         products = db.query(Product).all()
-        return [p.to_dict() for p in products]
+        return [{
+    "id": p.id,
+    "product_name": p.product_name,
+    "scientific_name": p.scientific_name,
+    "disease": p.disease,
+    "disease_scientific_name": p.disease_scientific_name,
+    "product_link": p.product_link,
+    "how_to_use": p.how_to_use,
+    "product_image": p.product_image
+} for p in products]
     except Exception as e:
         logger.error(f"Error fetching all products: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error.")

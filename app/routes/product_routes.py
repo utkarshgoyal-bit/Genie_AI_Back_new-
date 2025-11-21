@@ -1,12 +1,14 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from app.controllers import product_controller_FINAL as product_controller
+from app.config.db import get_db
+from sqlalchemy.orm import Session
 from typing import Optional
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
 @router.get("/")
-def get_products():
-    products = product_controller.get_all_products()
+def get_products(db: Session = Depends(get_db)):
+    products = product_controller.get_all_products(db)
     if not products:
         raise HTTPException(status_code=404, detail="No products found")
     return products
