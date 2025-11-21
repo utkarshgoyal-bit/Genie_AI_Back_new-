@@ -162,33 +162,25 @@ async def handle_analyze(
     total_time = round(time.time() - start_time, 2)
 
     response = {
-        "detection_id": detection_id,
-        "plant": {
-            "common_name": diagnosis.get("plant_common_name"),
-            "scientific_name": diagnosis.get("plant_scientific_name"),
-            "confidence": diagnosis.get("plant_confidence")
-        },
-        "diagnosis": {
-            "disease": diagnosis.get("disease"),
-            "disease_scientific_name": diagnosis.get("disease_scientific_name"),
-            "confidence": diagnosis.get("disease_confidence"),
-            "type": diagnosis.get("diagnosis_type"),
-            "symptoms": diagnosis.get("symptoms", []),
-            "cause": diagnosis.get("cause"),
-            "treatment": diagnosis.get("treatment", []),
-            "prevention": diagnosis.get("prevention", [])
-        },
-        "images": {
-            "uploaded": len(s3_urls),
-            "urls": s3_urls
-        },
-        "recommended_product": matched_product,  # Append product recommendation
-        "timing": {
-            "yolo_time": diagnosis.get("yolo_time"),
-            "openai_time": diagnosis.get("openai_time"),
-            "total_time": total_time
-        }
-    }
+    "detection_id": detection_id,
+    "common_name": diagnosis.get("plant_common_name"),
+    "scientific_name": diagnosis.get("plant_scientific_name"),
+    "plant_confidence": diagnosis.get("plant_confidence"),
+    "disease": diagnosis.get("disease"),
+    "disease_scientific_name": diagnosis.get("disease_scientific_name"),
+    "disease_confidence": diagnosis.get("disease_confidence"),
+    "diagnosis_type": diagnosis.get("diagnosis_type"),
+    "symptoms": diagnosis.get("symptoms", []),
+    "cause": diagnosis.get("cause"),
+    "treatment": diagnosis.get("treatment", []),
+    "prevention": diagnosis.get("prevention", []),
+    "image_urls": s3_urls,
+    "images_uploaded": len(s3_urls),
+    "recommended_product": matched_product,
+    "yolo_time": diagnosis.get("yolo_time"),
+    "openai_time": diagnosis.get("openai_time"),
+    "total_time": total_time
+}
 
     print(f"\n✅ REQUEST COMPLETE - Total time: {total_time}s")
     print(f"{'='*60}\n")
