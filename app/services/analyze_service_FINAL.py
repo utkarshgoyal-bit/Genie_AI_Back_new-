@@ -72,9 +72,9 @@ def extract_json_from_response(raw_response: str) -> str:
 async def analyze_images(images: list[bytes]) -> dict:
     """
     FINAL VERSION: Diagnostic Funnel approach with multi-image analysis
-    - Uses all provided images for comprehensive diagnosis
-    - Outputs both scientific and common names
-    - Includes disease field for fuzzy matching
+    - YOLO confirms plant detection (not identification)
+    - OpenAI identifies plant species independently
+    - Both YOLO and OpenAI results included in response
     """
     start_time = time.time()
 
@@ -92,7 +92,7 @@ async def analyze_images(images: list[bytes]) -> dict:
     best_image, best_type, best_idx = select_best_image(optimized_images)
     print(f"🎯 Selected best image for YOLO detection")
 
-    # Step 2: YOLO Detection
+    # Step 2: YOLO Detection (confirms it's a plant, stores detection info)
     print("🔍 Running YOLO plant detection...")
     with open("/tmp/temp_detect.jpg", "wb") as f:
         f.write(best_image)
@@ -107,14 +107,14 @@ async def analyze_images(images: list[bytes]) -> dict:
             "yolo_time": round(time.time() - start_time, 2)
         }
 
-    # Get highest confidence detection
+    # Get highest confidence detection (store for response, but don't pass to OpenAI)
     confidences = detections.conf.cpu().numpy()
     best_det_idx = confidences.argmax()
     plant_class_id = int(detections.cls[best_det_idx].item())
-    plant_confidence = float(confidences[best_det_idx])
-
-    class_name = model.names[plant_class_id]
-    print(f"✅ YOLO detected: {class_name} ({plant_confidence:.2%} confidence)")
+    yolo_confidence = float(confidences[best_det_idx])
+    yolo_class_name = model.names[plant_class_id]
+    
+    print(f"✅ YOLO detected: {yolo_class_name} ({yolo_confidence:.2%} confidence)")
 
     # Step 3: Prepare all images for OpenAI analysis
     print(f"🤖 Sending {len(optimized_images)} images to OpenAI for diagnosis...")
@@ -127,11 +127,13 @@ async def analyze_images(images: list[bytes]) -> dict:
             "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
         })
 
-    # Step 4: Diagnostic Funnel Prompt
-    prompt = f"""You are an expert plant pathologist. Analyze ALL provided images of this {class_name} plant.
+    # Step 4: Diagnostic Funnel Prompt (OpenAI identifies plant independently)
+    prompt = """You are an expert plant pathologist. Analyze ALL provided images.
+
+TASK: First IDENTIFY the plant, then DIAGNOSE any issues.
 
 DIAGNOSTIC FUNNEL (check in this order):
-1. Plant Identification: Confirm species (scientific + common name)
+1. Plant Identification: Determine species (scientific + common name) from visual features
 2. Holistic Assessment: Overall health, growth stage, environment clues
 3. Abiotic Stress FIRST: Check water, light, nutrients, temperature
 4. Biotic Issues: Only if abiotic factors ruled out - fungal, bacterial, pest
@@ -140,10 +142,10 @@ DIAGNOSTIC FUNNEL (check in this order):
 CRITICAL: Prioritize environmental/cultural issues over diseases. Most problems are abiotic.
 
 Output strict JSON (no markdown):
-{{
+{
   "plant_scientific_name": "Genus species",
   "plant_common_name": "Common name",
-  "plant_confidence": {plant_confidence},
+  "plant_confidence": 0.0-1.0,
   "disease": "Specific issue name (e.g., Nitrogen Deficiency, Black Spot, Healthy)",
   "disease_scientific_name": "Scientific pathogen name if biotic, otherwise null",
   "disease_confidence": 0.0-1.0,
@@ -152,8 +154,9 @@ Output strict JSON (no markdown):
   "cause": "Root cause explanation",
   "treatment": ["actionable", "prioritized", "steps"],
   "prevention": ["future", "care", "tips"]
-}}
+}
 
+If you cannot identify the plant, use "Unknown" for names and 0.0 for plant_confidence.
 Be concise. No filler. Evidence-based only."""
 
     # Step 5: OpenAI API Call
@@ -185,6 +188,13 @@ Be concise. No filler. Evidence-based only."""
         diagnosis["openai_time"] = openai_time
         diagnosis["total_time"] = round(time.time() - start_time, 2)
         diagnosis["images_analyzed"] = len(images)
+        
+        # Add YOLO detection info (separate from OpenAI identification)
+        diagnosis["yolo_detection"] = {
+            "detected": True,
+            "class": yolo_class_name,
+            "confidence": round(yolo_confidence, 4)
+        }
 
         print(f"✅ Total analysis time: {diagnosis['total_time']}s")
         return diagnosis
