@@ -52,7 +52,7 @@ async def analyze_images(images: list[bytes]) -> dict:
         print(f"  ✓ Image {idx+1}: {img_type}, reduced {len(img_bytes)} → {len(optimized)} bytes")
 
     # Use best image for YOLO detection
-    best_image = select_best_image(optimized_images)
+    best_image, best_type, best_idx = select_best_image(optimized_images)
     print(f"🎯 Selected best image for YOLO detection")
 
     # Step 2: YOLO Detection
