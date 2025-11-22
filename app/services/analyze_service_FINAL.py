@@ -3,6 +3,7 @@ import os
 import base64
 import json
 import time
+import re
 import openai
 from pathlib import Path
 from dotenv import load_dotenv
@@ -23,14 +24,50 @@ except Exception as e:
     raise RuntimeError(f"Failed to load YOLO model: {e}")
 
 api_key = os.getenv("OPENAI_API_KEY")
-print(f"🔍 API Key found: {api_key is not None}")
+print(f"🔑 API Key found: {api_key is not None}")
 if api_key:
-    print(f"🔍 API Key starts with: {api_key[:15]}...")
+    print(f"🔑 API Key starts with: {api_key[:15]}...")
 if not api_key:
     raise RuntimeError("OPENAI_API_KEY environment variable required")
 
 client = openai.OpenAI(api_key=api_key)
 print("✅ OpenAI client initialized")
+
+
+def extract_json_from_response(raw_response: str) -> str:
+    """
+    Extract JSON from OpenAI response, handling:
+    - Clean JSON
+    - JSON wrapped in ```json``` code blocks
+    - JSON with text before/after it
+    """
+    # Try to find JSON in markdown code block
+    json_match = re.search(r'```json?\s*([\s\S]*?)\s*```', raw_response)
+    if json_match:
+        return json_match.group(1).strip()
+    
+    # If response already starts with {, it's clean JSON
+    if raw_response.strip().startswith('{'):
+        return raw_response.strip()
+    
+    # Find raw JSON object anywhere in response
+    json_start = raw_response.find('{')
+    if json_start != -1:
+        # Find the matching closing brace
+        brace_count = 0
+        for i, char in enumerate(raw_response[json_start:]):
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    return raw_response[json_start:json_start + i + 1]
+        # If no matching brace found, return from start to end
+        return raw_response[json_start:]
+    
+    # No JSON found, return as-is (will fail at json.loads)
+    return raw_response
+
 
 async def analyze_images(images: list[bytes]) -> dict:
     """
@@ -72,9 +109,9 @@ async def analyze_images(images: list[bytes]) -> dict:
 
     # Get highest confidence detection
     confidences = detections.conf.cpu().numpy()
-    best_idx = confidences.argmax()
-    plant_class_id = int(detections.cls[best_idx].item())
-    plant_confidence = float(confidences[best_idx])
+    best_det_idx = confidences.argmax()
+    plant_class_id = int(detections.cls[best_det_idx].item())
+    plant_confidence = float(confidences[best_det_idx])
 
     class_name = model.names[plant_class_id]
     print(f"✅ YOLO detected: {class_name} ({plant_confidence:.2%} confidence)")
@@ -138,13 +175,9 @@ Be concise. No filler. Evidence-based only."""
 
         raw_response = response.choices[0].message.content.strip()
 
-        # Parse JSON (handle markdown code blocks)
-        if raw_response.startswith("```"):
-            raw_response = raw_response.split("```")[1]
-            if raw_response.startswith("json"):
-                raw_response = raw_response[4:]
-
-        diagnosis = json.loads(raw_response.strip())
+        # Parse JSON (handle text before/after code blocks)
+        cleaned_json = extract_json_from_response(raw_response)
+        diagnosis = json.loads(cleaned_json)
 
         # Add metadata
         diagnosis["success"] = True
@@ -170,6 +203,8 @@ Be concise. No filler. Evidence-based only."""
             "success": False,
             "error": str(e)
         }
+
+
 async def analyze_images_direct(images: list[bytes]) -> dict:
     """
     DIRECT VERSION: Skips YOLO detection, OpenAI identifies plant + diagnoses.
@@ -249,13 +284,9 @@ Be concise. No filler. Evidence-based only."""
 
         raw_response = response.choices[0].message.content.strip()
 
-        # Parse JSON (handle markdown code blocks)
-        if raw_response.startswith("```"):
-            raw_response = raw_response.split("```")[1]
-            if raw_response.startswith("json"):
-                raw_response = raw_response[4:]
-
-        diagnosis = json.loads(raw_response.strip())
+        # Parse JSON (handle text before/after code blocks)
+        cleaned_json = extract_json_from_response(raw_response)
+        diagnosis = json.loads(cleaned_json)
 
         # Add metadata
         diagnosis["success"] = True
