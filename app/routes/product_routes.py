@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from app.controllers import product_controller_FINAL as product_controller
+from app.controllers import product_controller as product_controller
 from app.config.db import get_db
 from sqlalchemy.orm import Session
 from typing import Optional

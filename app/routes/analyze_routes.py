@@ -1,9 +1,9 @@
 from fastapi import APIRouter, UploadFile, File, Depends, Request, BackgroundTasks
 from typing import List
-from app.controllers.analyze_controller_FINAL import handle_analyze
+from app.controllers.analyze_controller import handle_analyze
 from app.config.db import get_db  
 from sqlalchemy.orm import Session
-from app.controllers.analyze_controller_FINAL import handle_analyze, handle_analyze_direct
+from app.controllers.analyze_controller import handle_analyze, handle_analyze_direct
 router = APIRouter(prefix="/analyze", tags=["Analyze"])
 
 @router.post("/")

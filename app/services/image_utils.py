@@ -24,9 +24,9 @@ def detect_image_type(image_data: bytes) -> str:
 
 def optimize_image(image_data: bytes, image_type: str = None) -> bytes:
     """
-    SAFE CONDITIONAL OPTIMIZATION:
-    - Close-ups: Crop 85% center + resize 512px + compress 75% = 80% reduction
-    - Wide-views: Keep full + resize 768px + compress 80% = 60% reduction
+    LESS AGGRESSIVE OPTIMIZATION (reduced compression & resizing):
+    - Close-ups: keep full frame (no center crop), resize to up to 1024px, quality 90
+    - Wide-views: resize to up to 1024px, quality 90
     """
     try:
         # Auto-detect type if not provided
@@ -37,19 +37,15 @@ def optimize_image(image_data: bytes, image_type: str = None) -> bytes:
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
-            # CONDITIONAL OPTIMIZATION based on image type
+            # CONDITIONAL OPTIMIZATION based on image type (less aggressive)
             if image_type == "close_up":
-                # SAFE to crop - disease in center
-                w, h = img.size
-                crop_w, crop_h = int(w * 0.85), int(h * 0.85)
-                left, top = (w - crop_w) // 2, (h - crop_h) // 2
-                img = img.crop((left, top, left + crop_w, top + crop_h))
-                max_size = 512
-                quality = 75
+                # Do NOT crop; preserve full frame for analysis
+                max_size = 1024
+                quality = 90
             else:  # wide_view or unknown
-                # Keep full for context
-                max_size = 768
-                quality = 80
+                # Keep full for context, but allow larger resize with higher quality
+                max_size = 1024
+                quality = 90
             
             # Resize maintaining aspect ratio
             img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)

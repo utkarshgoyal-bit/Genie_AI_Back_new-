@@ -1,4 +1,4 @@
-from app.controllers.product_controller_FINAL import find_product_by_diagnosis
+from app.controllers.product_controller import find_product_by_diagnosis
 from app.controllers.otp_controller import create_access_token
 from app.config.db import SessionLocal
 import json
