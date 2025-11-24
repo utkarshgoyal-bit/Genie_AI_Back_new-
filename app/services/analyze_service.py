@@ -142,28 +142,32 @@ SUPPORTED PLANTS (ONLY identify these 10):
 9. Epipremnum aureum (Money Plant)
 10. Murraya koenigii (Curry Plant)
 
-Rules- try to identify the plant species first, then provide diagnosis.
-DIAGNOSTIC APPROACH:
-1. Identify plant carefully
-2. Observe symptoms thoroughly before diagnosing
-3. Check abiotic issues FIRST (water, light, nutrients)
-4. Check biotic issues SECOND (pests, diseases)
+RULES:
+- Plant NOT in list OR confidence <70% → Return "Unknown"
+- Identify plant species first, then diagnose
 
-REGIONAL COMMON ISSUES (Your area):
-Pests: Mealy bugs (white cottony), Spider mites (tiny, webbing), Scale (brown bumps)
+DIAGNOSTIC APPROACH:
+1. ASSESS WHOLE PLANT: Check if damage is isolated (dry leaves) or systemic (disease)
+2. Look for overall health: Are most leaves healthy? Is new growth present?
+3. Check abiotic FIRST: water, light, nutrients
+4. Check biotic SECOND: pests, diseases
+
+REGIONAL COMMON ISSUES:
+Pests: Mealy bugs (white cottony), Spider mites (webbing), Scale (brown bumps)
 Fungal: Powdery mildew (white powder), Root rot (soggy soil, wilting)
-Abiotic: Heat stress (scorched edges), Overwatering (yellow leaves, droopy), Underwatering (crispy brown), Nutrient deficiency (yellowing patterns)
+Abiotic: Heat stress (scorched edges), Overwatering (yellow/droopy), Underwatering (crispy brown), Nutrient deficiency (yellowing patterns), Natural leaf aging (lower leaves only)
 
 KEY DIAGNOSTIC CLUES:
-- White substance → Check for movement/legs (pest) vs powder (fungal)
+- Isolated dry leaves + healthy plant → Natural aging or minor stress, NOT disease
+- White substance → Check insects (legs/movement) vs fungal (powder)
 - Yellow leaves → Check soil moisture first, then nutrients
 - Brown spots → Check pattern: circular (fungal) vs irregular (physical)
-- Wilting → Check soil: soggy (overwater/rot) vs dry (underwater)
+- Wilting → Check soil: soggy (overwater) vs dry (underwater)
 
-[Output format]
+OUTPUT FORMAT:
 - "cause": Single sentence, max 15 words
 - "symptoms": 2-5 short phrases, max 5 words each
-- "treatment": 3-5 action items, max 10 words each  
+- "treatment": 3-5 action items, max 10 words each
 - "prevention": 2-4 tips, max 10 words each
 
 Return ONLY valid JSON (no markdown, no code blocks):
@@ -282,28 +286,32 @@ SUPPORTED PLANTS (ONLY identify these 10):
 9. Epipremnum aureum (Money Plant)
 10. Murraya koenigii (Curry Plant)
 
-Rules- try to identify the plant species first, then provide diagnosis.
-DIAGNOSTIC APPROACH:
-1. Identify plant carefully
-2. Observe symptoms thoroughly before diagnosing
-3. Check abiotic issues FIRST (water, light, nutrients)
-4. Check biotic issues SECOND (pests, diseases)
+RULES:
+- Plant NOT in list OR confidence <70% → Return "Unknown"
+- Identify plant species first, then diagnose
 
-REGIONAL COMMON ISSUES (Your area):
-Pests: Mealy bugs (white cottony), Spider mites (tiny, webbing), Scale (brown bumps)
+DIAGNOSTIC APPROACH:
+1. ASSESS WHOLE PLANT: Check if damage is isolated (dry leaves) or systemic (disease)
+2. Look for overall health: Are most leaves healthy? Is new growth present?
+3. Check abiotic FIRST: water, light, nutrients
+4. Check biotic SECOND: pests, diseases
+
+REGIONAL COMMON ISSUES:
+Pests: Mealy bugs (white cottony), Spider mites (webbing), Scale (brown bumps)
 Fungal: Powdery mildew (white powder), Root rot (soggy soil, wilting)
-Abiotic: Heat stress (scorched edges), Overwatering (yellow leaves, droopy), Underwatering (crispy brown), Nutrient deficiency (yellowing patterns)
+Abiotic: Heat stress (scorched edges), Overwatering (yellow/droopy), Underwatering (crispy brown), Nutrient deficiency (yellowing patterns), Natural leaf aging (lower leaves only)
 
 KEY DIAGNOSTIC CLUES:
-- White substance → Check for movement/legs (pest) vs powder (fungal)
+- Isolated dry leaves + healthy plant → Natural aging or minor stress, NOT disease
+- White substance → Check insects (legs/movement) vs fungal (powder)
 - Yellow leaves → Check soil moisture first, then nutrients
 - Brown spots → Check pattern: circular (fungal) vs irregular (physical)
-- Wilting → Check soil: soggy (overwater/rot) vs dry (underwater)
+- Wilting → Check soil: soggy (overwater) vs dry (underwater)
 
-[Output format]
+OUTPUT FORMAT:
 - "cause": Single sentence, max 15 words
 - "symptoms": 2-5 short phrases, max 5 words each
-- "treatment": 3-5 action items, max 10 words each  
+- "treatment": 3-5 action items, max 10 words each
 - "prevention": 2-4 tips, max 10 words each
 
 Return ONLY valid JSON (no markdown, no code blocks):
