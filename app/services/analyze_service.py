@@ -128,36 +128,44 @@ async def analyze_images(images: list[bytes]) -> dict:
         })
 
     # Step 4: Diagnostic Funnel Prompt (OpenAI identifies plant independently)
-    prompt = """You are an expert plant pathologist. Analyze ALL provided images.
+    prompt = """You are an expert plant pathologist specializing in Indian houseplants.
 
-TASK: First IDENTIFY the plant, then DIAGNOSE any issues.
+SUPPORTED PLANTS (ONLY identify these 10):
+1. Rosa (Rose)
+2. Dypsis lutescens (Areca Palm)
+3. Hibiscus rosa-sinensis (Hibiscus)
+4. Codiaeum variegatum (Croton)
+5. Spathiphyllum (Peace Lily)
+6. Sansevieria trifasciata (Snake Plant)
+7. Solanum lycopersicum (Tomato)
+8. Ficus lyrata (Fiddle Leaf Fig)
+9. Epipremnum aureum (Money Plant)
+10. Murraya koenigii (Curry Plant)
 
-DIAGNOSTIC FUNNEL (check in this order):
-1. Plant Identification: Determine species (scientific + common name) from visual features
-2. Holistic Assessment: Overall health, growth stage, environment clues
-3. Abiotic Stress FIRST: Check water, light, nutrients, temperature
-4. Biotic Issues: Only if abiotic factors ruled out - fungal, bacterial, pest
-5. Care Recommendations: Specific, actionable steps
+RULES:
+- Plant NOT in list → Return "Unknown"
+- Confidence < 70% → Return "Unknown"
+- DO NOT guess or hallucinate
 
-CRITICAL: Prioritize environmental/cultural issues over diseases. Most problems are abiotic.
+DIAGNOSTIC APPROACH:
+1. Identify plant carefully
+2. Observe symptoms thoroughly before diagnosing
+3. Check abiotic issues FIRST (water, light, nutrients)
+4. Check biotic issues SECOND (pests, diseases)
 
-Output strict JSON (no markdown):
-{
-  "plant_scientific_name": "Genus species",
-  "plant_common_name": "Common name",
-  "plant_confidence": 0.0-1.0,
-  "disease": "Specific issue name (e.g., Nitrogen Deficiency, Black Spot, Healthy)",
-  "disease_scientific_name": "Scientific pathogen name if biotic, otherwise null",
-  "disease_confidence": 0.0-1.0,
-  "diagnosis_type": "abiotic|biotic|healthy",
-  "symptoms": ["concise", "observed", "symptoms"],
-  "cause": "Root cause explanation",
-  "treatment": ["actionable", "prioritized", "steps"],
-  "prevention": ["future", "care", "tips"]
-}
+REGIONAL COMMON ISSUES (Your area):
+Pests: Mealy bugs (white cottony), Spider mites (tiny, webbing), Scale (brown bumps)
+Fungal: Powdery mildew (white powder), Root rot (soggy soil, wilting)
+Abiotic: Heat stress (scorched edges), Overwatering (yellow leaves, droopy), Underwatering (crispy brown), Nutrient deficiency (yellowing patterns)
 
-If you cannot identify the plant, use "Unknown" for names and 0.0 for plant_confidence.
-Be concise. No filler. Evidence-based only."""
+KEY DIAGNOSTIC CLUES:
+- White substance → Check for movement/legs (pest) vs powder (fungal)
+- Yellow leaves → Check soil moisture first, then nutrients
+- Brown spots → Check pattern: circular (fungal) vs irregular (physical)
+- Wilting → Check soil: soggy (overwater/rot) vs dry (underwater)
+
+[Output format]
+"""
 
     # Step 5: OpenAI API Call
     openai_start = time.time()
@@ -244,36 +252,60 @@ async def analyze_images_direct(images: list[bytes]) -> dict:
         })
 
     # Step 3: Prompt for OpenAI (must identify plant + diagnose)
-    prompt = """You are an expert plant pathologist. Analyze ALL provided images.
+    prompt = """You are an expert plant pathologist specializing in Indian houseplants.
 
-TASK: First IDENTIFY the plant, then DIAGNOSE any issues.
+SUPPORTED PLANTS (ONLY identify these 10):
+1. Rosa (Rose)
+2. Dypsis lutescens (Areca Palm)
+3. Hibiscus rosa-sinensis (Hibiscus)
+4. Codiaeum variegatum (Croton)
+5. Spathiphyllum (Peace Lily)
+6. Sansevieria trifasciata (Snake Plant)
+7. Solanum lycopersicum (Tomato)
+8. Ficus lyrata (Fiddle Leaf Fig)
+9. Epipremnum aureum (Money Plant)
+10. Murraya koenigii (Curry Plant)
 
-DIAGNOSTIC FUNNEL (check in this order):
-1. Plant Identification: Determine species (scientific + common name) from visual features
-2. Holistic Assessment: Overall health, growth stage, environment clues
-3. Abiotic Stress FIRST: Check water, light, nutrients, temperature
-4. Biotic Issues: Only if abiotic factors ruled out - fungal, bacterial, pest
-5. Care Recommendations: Specific, actionable steps
+Rules- try to identify the plant species first, then provide diagnosis.
+DIAGNOSTIC APPROACH:
+1. Identify plant carefully
+2. Observe symptoms thoroughly before diagnosing
+3. Check abiotic issues FIRST (water, light, nutrients)
+4. Check biotic issues SECOND (pests, diseases)
 
-CRITICAL: Prioritize environmental/cultural issues over diseases. Most problems are abiotic.
+REGIONAL COMMON ISSUES (Your area):
+Pests: Mealy bugs (white cottony), Spider mites (tiny, webbing), Scale (brown bumps)
+Fungal: Powdery mildew (white powder), Root rot (soggy soil, wilting)
+Abiotic: Heat stress (scorched edges), Overwatering (yellow leaves, droopy), Underwatering (crispy brown), Nutrient deficiency (yellowing patterns)
 
-Output strict JSON (no markdown):
+KEY DIAGNOSTIC CLUES:
+- White substance → Check for movement/legs (pest) vs powder (fungal)
+- Yellow leaves → Check soil moisture first, then nutrients
+- Brown spots → Check pattern: circular (fungal) vs irregular (physical)
+- Wilting → Check soil: soggy (overwater/rot) vs dry (underwater)
+
+[Output format]
+- "cause": Single sentence, max 15 words
+- "symptoms": 2-5 short phrases, max 5 words each
+- "treatment": 3-5 action items, max 10 words each  
+- "prevention": 2-4 tips, max 10 words each
+
+Return ONLY valid JSON (no markdown, no code blocks):
 {
   "plant_scientific_name": "Genus species",
   "plant_common_name": "Common name",
   "plant_confidence": 0.0-1.0,
-  "disease": "Specific issue name (e.g., Nitrogen Deficiency, Black Spot, Healthy)",
-  "disease_scientific_name": "Scientific pathogen name if biotic, otherwise null",
+  "disease": "Specific issue name",
+  "disease_scientific_name": "Scientific name if biotic, otherwise null",
   "disease_confidence": 0.0-1.0,
   "diagnosis_type": "abiotic|biotic|healthy",
-  "symptoms": ["concise", "observed", "symptoms"],
-  "cause": "Root cause explanation",
-  "treatment": ["actionable", "prioritized", "steps"],
-  "prevention": ["future", "care", "tips"]
+  "symptoms": ["short observation", "another"],
+  "cause": "Single sentence root cause",
+  "treatment": ["action 1", "action 2", "action 3"],
+  "prevention": ["tip 1", "tip 2"]
 }
 
-If you cannot identify the plant, use "Unknown" for names and 0.0 for plant_confidence.
-Be concise. No filler. Evidence-based only."""
+Be precise. Evidence-based only. Do not hallucinate."""
 
     # Step 4: OpenAI API Call
     openai_start = time.time()
