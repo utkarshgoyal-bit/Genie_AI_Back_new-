@@ -142,11 +142,7 @@ SUPPORTED PLANTS (ONLY identify these 10):
 9. Epipremnum aureum (Money Plant)
 10. Murraya koenigii (Curry Plant)
 
-RULES:
-- Plant NOT in list → Return "Unknown"
-- Confidence < 70% → Return "Unknown"
-- DO NOT guess or hallucinate
-
+Rules- try to identify the plant species first, then provide diagnosis.
 DIAGNOSTIC APPROACH:
 1. Identify plant carefully
 2. Observe symptoms thoroughly before diagnosing
@@ -165,7 +161,27 @@ KEY DIAGNOSTIC CLUES:
 - Wilting → Check soil: soggy (overwater/rot) vs dry (underwater)
 
 [Output format]
-"""
+- "cause": Single sentence, max 15 words
+- "symptoms": 2-5 short phrases, max 5 words each
+- "treatment": 3-5 action items, max 10 words each  
+- "prevention": 2-4 tips, max 10 words each
+
+Return ONLY valid JSON (no markdown, no code blocks):
+{
+  "plant_scientific_name": "Genus species",
+  "plant_common_name": "Common name",
+  "plant_confidence": 0.0-1.0,
+  "disease": "Specific issue name",
+  "disease_scientific_name": "Scientific name if biotic, otherwise null",
+  "disease_confidence": 0.0-1.0,
+  "diagnosis_type": "abiotic|biotic|healthy",
+  "symptoms": ["short observation", "another"],
+  "cause": "Single sentence root cause",
+  "treatment": ["action 1", "action 2", "action 3"],
+  "prevention": ["tip 1", "tip 2"]
+}
+
+Be precise. Evidence-based only. Do not hallucinate."""
 
     # Step 5: OpenAI API Call
     openai_start = time.time()
