@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.config.db import get_db
 from app.models.detection_model import PlantDetection
@@ -10,7 +10,19 @@ router = APIRouter(
 )
 
 @router.get("/")
-def get_detection_history(token: str, db: Session = Depends(get_db)):
+def get_detection_history(request: Request, db: Session = Depends(get_db)):
+    """
+    Get user's diagnosis history
+    Requires Authorization header with JWT token
+    """
+    # Extract token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    
+    token = auth_header.split(" ")[1]
+    
+    # Decode token
     payload = decode_access_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -19,6 +31,7 @@ def get_detection_history(token: str, db: Session = Depends(get_db)):
     if not mobile:
         raise HTTPException(status_code=401, detail="Invalid token payload")
 
+    # Get user's history
     history = db.query(PlantDetection).filter(PlantDetection.mobile == mobile).all()
 
     return {"history": [dict(
