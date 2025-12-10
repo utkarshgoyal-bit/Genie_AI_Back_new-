@@ -1,14 +1,14 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from app.routes.analyze_routes import router as analyze_router
-from app.routes.product_routes import router as product_router
-from app.routes.otp_routes import router as otp_routes
-from app.routes.history_routes import router as history_router
-from app.config.db import Base, engine
-from app.models.product_model import Product
+from app.domains.analyze import router as analyze_router
+from app.domains.products import router as product_router, load_products_into_cache
+from app.domains.auth import router as auth_router
+from app.domains.history import router as history_router
+from app.utils import Base, engine
+from app.models import Product
 from app.services.product_import_service import ProductImportService
-from app.services.product_cache import load_products_into_cache
 from fastapi.middleware.cors import CORSMiddleware
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -29,9 +29,9 @@ async def lifespan(app: FastAPI):
     stats = ProductImportService.get_product_stats(engine)
     if stats:
         print(f"\n📊 PRODUCT DATABASE STATS:")
-        print(f"   Total Products: {stats.get('total_products', 0)}")
-        print(f"   Unique Diseases: {stats.get('unique_diseases', 0)}")
-        print(f"   Unique Plants: {stats.get('unique_plants', 0)}")
+        print(f"  Total Products: {stats.get('total_products', 0)}")
+        print(f"  Unique Diseases: {stats.get('unique_diseases', 0)}")
+        print(f"  Unique Plants: {stats.get('unique_plants', 0)}")
     
     print("\n✅ APPLICATION READY!")
     print("="*60 + "\n")
@@ -40,22 +40,41 @@ async def lifespan(app: FastAPI):
     
     print("\n👋 Shutting down application...")
 
+
 app = FastAPI(title="Plant Disease Detection API", version="4.2.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 app.include_router(analyze_router)
 app.include_router(product_router)
-app.include_router(otp_routes)
+app.include_router(auth_router)
 app.include_router(history_router)
+
 
 @app.get("/")
 def root():
-    return {"status": "Plant Disease Detection API v4.2.0", "message": "API is running successfully"}
+    return {
+        "status": "Plant Disease Detection API v4.2.0",
+        "message": "API is running successfully"
+    }
+
 
 @app.get("/health")
 def health_check():
     stats = ProductImportService.get_product_stats(engine)
-    return {"status": "healthy", "database": "connected", "products_loaded": stats.get('total_products', 0) > 0, "product_stats": stats}
+    return {
+        "status": "healthy",
+        "database": "connected",
+        "products_loaded": stats.get('total_products', 0) > 0,
+        "product_stats": stats
+    }
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -3,6 +3,7 @@ from rapidfuzz import process, fuzz
 from functools import lru_cache
 from typing import List, Tuple, Optional
 
+
 def normalize(text: str) -> str:
     """
     Normalizes text by converting to lowercase and removing special characters.
@@ -10,6 +11,7 @@ def normalize(text: str) -> str:
     if not isinstance(text, str):
         return ""
     return re.sub(r'[^a-z0-9\s]', '', text.lower()).strip()
+
 
 @lru_cache(maxsize=1024)
 def fuzzy_lookup(query: str, choices: Tuple[str, ...], score_cutoff: int = 80) -> Optional[Tuple[str, int, int]]:
@@ -25,4 +27,5 @@ def fuzzy_lookup(query: str, choices: Tuple[str, ...], score_cutoff: int = 80) -
     if result:
         best_match, score, index = result
         return best_match, int(score), index
+    
     return None

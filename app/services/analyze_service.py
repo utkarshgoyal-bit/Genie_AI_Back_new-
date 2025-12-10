@@ -94,8 +94,10 @@ async def analyze_images(images: list[bytes]) -> dict:
 
     # Step 2: YOLO Detection (confirms it's a plant, stores detection info)
     print("🔍 Running YOLO plant detection...")
+  
     with open("/tmp/temp_detect.jpg", "wb") as f:
-        f.write(best_image)
+        f.write(best_image[0])
+
 
     yolo_results = model("/tmp/temp_detect.jpg", verbose=False)
     detections = yolo_results[0].boxes
@@ -379,3 +381,11 @@ Be precise. Evidence-based only. Do not hallucinate."""
             "success": False,
             "error": str(e)
         }
+    
+# Backwards-compatible alias for older code
+async def analyze_images_with_yolo(images: list[bytes]) -> dict:
+    """
+    Wrapper to keep old imports working.
+    Uses analyze_images() which already runs YOLO + OpenAI.
+    """
+    return await analyze_images(images)

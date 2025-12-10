@@ -1,6 +1,7 @@
 from PIL import Image, ImageFilter
 import io
 
+
 def detect_image_type(image_data: bytes) -> str:
     """
     SMART: Detect if image is close-up or wide-view using edge density.
@@ -64,7 +65,7 @@ def select_best_image(images: list[bytes]) -> tuple[bytes, str, int]:
     Returns: (selected_image_bytes, image_type, selected_index)
     """
     if len(images) == 1:
-        return images[0], detect_image_type(images[0]), 0
+        return images, detect_image_type(images), 0
     
     # Detect types for all images
     image_types = [detect_image_type(img) for img in images]
@@ -75,4 +76,4 @@ def select_best_image(images: list[bytes]) -> tuple[bytes, str, int]:
         return images[idx], "close_up", idx
     
     # No close-up found, use first image
-    return images[0], image_types[0], 0
+    return images, image_types, 0
