@@ -71,6 +71,7 @@ class ProductResponse(ProductBase):
 
 class UnmappedProduct(BaseModel):
     scientific_name: str
+    common_name: Optional[str] = None
     disease: str
     disease_scientific_name: str
     detection_count: int
@@ -445,8 +446,9 @@ async def admin_panel(username: str = Depends(verify_admin)):
                 </div>
                 <form id="add-form" onsubmit="addProduct(event)">
                     <div class="form-group">
-                        <label>Plant (Scientific Name) *</label>
-                        <input type="text" id="add-scientific-name" class="readonly" readonly required>
+                        <label>Plant Name *</label>
+                        <input type="text" id="add-plant-display" class="readonly" readonly required>
+                        <input type="hidden" id="add-scientific-name">
                     </div>
                     <div class="form-group">
                         <label>Disease (Common Name) *</label>
@@ -584,7 +586,7 @@ async def admin_panel(username: str = Depends(verify_admin)):
                     <table>
                         <thead>
                             <tr>
-                                <th>Plant (Scientific)</th>
+                                <th>Plant Name</th>
                                 <th>Disease</th>
                                 <th>Disease (Scientific)</th>
                                 <th>Detections</th>
@@ -594,7 +596,7 @@ async def admin_panel(username: str = Depends(verify_admin)):
                         <tbody>
                             ${data.map(item => `
                                 <tr>
-                                    <td>${item.scientific_name || 'N/A'}</td>
+                                    <td>${item.common_name || item.scientific_name || 'N/A'}</td>
                                     <td>${item.disease || 'N/A'}</td>
                                     <td>${item.disease_scientific_name || 'N/A'}</td>
                                     <td>${item.detection_count}</td>
@@ -687,6 +689,7 @@ async def admin_panel(username: str = Depends(verify_admin)):
                 const search = document.getElementById('unmapped-search').value.toLowerCase();
                 const filtered = unmappedData.filter(item => 
                     (item.scientific_name && item.scientific_name.toLowerCase().includes(search)) ||
+                    (item.common_name && item.common_name.toLowerCase().includes(search)) ||
                     (item.disease && item.disease.toLowerCase().includes(search)) ||
                     (item.disease_scientific_name && item.disease_scientific_name.toLowerCase().includes(search))
                 );
@@ -706,6 +709,12 @@ async def admin_panel(username: str = Depends(verify_admin)):
             
             // Open add modal
             function openAddModal(item) {
+                // Show common name with scientific name in parentheses
+                const plantDisplay = item.common_name 
+                    ? `${item.common_name} (${item.scientific_name})`
+                    : item.scientific_name;
+                
+                document.getElementById('add-plant-display').value = plantDisplay;
                 document.getElementById('add-scientific-name').value = item.scientific_name || '';
                 document.getElementById('add-disease').value = item.disease || '';
                 document.getElementById('add-disease-scientific').value = item.disease_scientific_name || '';
@@ -927,6 +936,7 @@ async def get_unmapped_products(
                 if display_key not in detection_map:
                     detection_map[display_key] = {
                         "scientific_name": scientific_name,
+                        "common_name": detection.common_name,  # Add common name
                         "disease": disease,
                         "disease_scientific_name": disease_scientific,
                         "detection_count": 0
