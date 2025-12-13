@@ -552,7 +552,10 @@ async def admin_panel(username: str = Depends(verify_admin)):
                 
                 try {
                     const response = await fetch('/admin/api/unmapped-products');
-                    if (!response.ok) throw new Error('Failed to load');
+                    if (!response.ok) {
+                        const error = await response.text();
+                        throw new Error(error);
+                    }
                     
                     unmappedData = await response.json();
                     document.getElementById('unmapped-count').textContent = unmappedData.length;
@@ -568,7 +571,7 @@ async def admin_panel(username: str = Depends(verify_admin)):
                     
                     renderUnmappedTable(unmappedData);
                 } catch (error) {
-                    container.innerHTML = '<div class="loading">Error loading data</div>';
+                    container.innerHTML = '<div class="loading">Error loading data: ' + error.message + '</div>';
                     console.error(error);
                 }
             }
@@ -834,52 +837,117 @@ async def get_unmapped_products(
 ):
     """
     Get all unique plant+disease combinations from PlantDetection 
-    that don't have corresponding products
+    that don't have corresponding products.
+    
+    Handles:
+    - JSON arrays in disease fields
+    - NULL disease_scientific_name (for abiotic/healthy cases)
+    - Case-insensitive comparison
     """
     try:
-        # Get all unique combinations from PlantDetection with detection count
-        query = text("""
-            SELECT 
-                scientific_name,
-                disease->>0 AS disease,
-                disease_scientific_name->>0 AS disease_scientific_name,
-                COUNT(*) as detection_count
-            FROM plant_detections
-            WHERE scientific_name IS NOT NULL 
-                AND disease IS NOT NULL 
-                AND disease_scientific_name IS NOT NULL
-                AND jsonb_array_length(disease) > 0
-                AND jsonb_array_length(disease_scientific_name) > 0
-            GROUP BY scientific_name, disease->>0, disease_scientific_name->>0
-        """)
+        # Get all detections from database
+        all_detections = db.query(PlantDetection).all()
+        logger.info(f"Total detections in database: {len(all_detections)}")
         
-        result = db.execute(query)
-        detections = result.fetchall()
-        
-        # Get all existing product combinations
+        # Get all existing products
         products = db.query(Product).all()
-        existing_combinations = {
-            (p.scientific_name, p.disease, p.disease_scientific_name) 
-            for p in products
-        }
+        logger.info(f"Total products in database: {len(products)}")
         
-        # Filter out combinations that already have products
-        unmapped = []
-        for row in detections:
-            combination = (row[0], row[1], row[2])
-            if combination not in existing_combinations:
-                unmapped.append({
-                    "scientific_name": row[0],
-                    "disease": row[1],
-                    "disease_scientific_name": row[2],
-                    "detection_count": row[3]
-                })
+        # Build set of existing product combinations
+        existing_combinations = set()
+        for p in products:
+            if p.scientific_name and p.disease_scientific_name:
+                # Normalize for comparison
+                key = (
+                    p.scientific_name.lower().strip(),
+                    p.disease_scientific_name.lower().strip()
+                )
+                existing_combinations.add(key)
         
-        logger.info(f"Found {len(unmapped)} unmapped products")
+        logger.info(f"Existing product combinations: {len(existing_combinations)}")
+        
+        # Process detections to extract unique combinations
+        detection_map = {}
+        skipped_no_plant = 0
+        skipped_no_disease = 0
+        skipped_healthy = 0
+        
+        for detection in all_detections:
+            scientific_name = detection.scientific_name
+            
+            # Skip if no plant name
+            if not scientific_name:
+                skipped_no_plant += 1
+                continue
+            
+            # Handle disease fields - they could be arrays or strings
+            if isinstance(detection.disease, list):
+                disease_list = detection.disease
+            elif detection.disease:
+                disease_list = [detection.disease]
+            else:
+                disease_list = []
+            
+            if isinstance(detection.disease_scientific_name, list):
+                disease_sci_list = detection.disease_scientific_name
+            elif detection.disease_scientific_name:
+                disease_sci_list = [detection.disease_scientific_name]
+            else:
+                disease_sci_list = []
+            
+            # Get first element from arrays
+            disease = disease_list[0] if disease_list and len(disease_list) > 0 else None
+            disease_scientific = disease_sci_list[0] if disease_sci_list and len(disease_sci_list) > 0 else None
+            
+            # Skip if no disease at all
+            if not disease:
+                skipped_no_disease += 1
+                continue
+            
+            # Skip "Healthy" plants - they don't need products
+            if disease and "healthy" in disease.lower():
+                skipped_healthy += 1
+                continue
+            
+            # For abiotic cases (NULL disease_scientific_name), use disease common name
+            if not disease_scientific:
+                # Use the common disease name as the scientific name for matching
+                disease_scientific = disease
+            
+            # Create unique key (normalized)
+            key = (
+                scientific_name.lower().strip(),
+                disease_scientific.lower().strip()
+            )
+            
+            # Check if this combination exists in products
+            if key not in existing_combinations:
+                # Use original (non-normalized) values for display
+                display_key = (scientific_name, disease, disease_scientific)
+                if display_key not in detection_map:
+                    detection_map[display_key] = {
+                        "scientific_name": scientific_name,
+                        "disease": disease,
+                        "disease_scientific_name": disease_scientific,
+                        "detection_count": 0
+                    }
+                detection_map[display_key]["detection_count"] += 1
+        
+        # Convert to list
+        unmapped = list(detection_map.values())
+        
+        # Sort by detection count (highest first)
+        unmapped.sort(key=lambda x: x["detection_count"], reverse=True)
+        
+        logger.info(f"Skipped - No plant name: {skipped_no_plant}")
+        logger.info(f"Skipped - No disease: {skipped_no_disease}")
+        logger.info(f"Skipped - Healthy plants: {skipped_healthy}")
+        logger.info(f"Found {len(unmapped)} unmapped product combinations")
+        
         return unmapped
         
     except Exception as e:
-        logger.error(f"Error fetching unmapped products: {e}")
+        logger.error(f"Error fetching unmapped products: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -906,11 +974,10 @@ async def create_product(
 ):
     """Add a new product"""
     try:
-        # Check if product already exists
+        # Check if product already exists for this exact combination
         existing = db.query(Product).filter(
             and_(
                 Product.scientific_name == product.scientific_name,
-                Product.disease == product.disease,
                 Product.disease_scientific_name == product.disease_scientific_name
             )
         ).first()
@@ -1007,27 +1074,39 @@ async def get_stats(
         total_products = db.query(Product).count()
         total_detections = db.query(PlantDetection).count()
         
-        # Get unmapped count
-        query = text("""
-            SELECT COUNT(DISTINCT (scientific_name, disease->>0, disease_scientific_name->>0))
-            FROM plant_detections
-            WHERE scientific_name IS NOT NULL 
-                AND disease IS NOT NULL 
-                AND disease_scientific_name IS NOT NULL
-                AND jsonb_array_length(disease) > 0
-                AND jsonb_array_length(disease_scientific_name) > 0
-        """)
+        # Get unmapped products using the same logic as get_unmapped_products
+        all_detections = db.query(PlantDetection).all()
+        products = db.query(Product).all()
+        existing_combinations = {
+            (p.scientific_name, p.disease_scientific_name) 
+            for p in products
+            if p.scientific_name and p.disease_scientific_name
+        }
         
-        result = db.execute(query)
-        unique_detections = result.scalar()
+        unique_combinations = set()
+        unmapped_combinations = set()
         
-        unmapped_count = max(0, unique_detections - total_products)
+        for detection in all_detections:
+            scientific_name = detection.scientific_name
+            disease_list = detection.disease if isinstance(detection.disease, list) else []
+            disease_sci_list = detection.disease_scientific_name if isinstance(detection.disease_scientific_name, list) else []
+            
+            disease_scientific = disease_sci_list[0] if disease_sci_list and len(disease_sci_list) > 0 else None
+            
+            if not scientific_name or not disease_scientific:
+                continue
+            
+            key = (scientific_name, disease_scientific)
+            unique_combinations.add(key)
+            
+            if key not in existing_combinations:
+                unmapped_combinations.add(key)
         
         return {
             "total_products": total_products,
             "total_detections": total_detections,
-            "unmapped_count": unmapped_count,
-            "unique_detections": unique_detections
+            "unmapped_count": len(unmapped_combinations),
+            "unique_detections": len(unique_combinations)
         }
         
     except Exception as e:
