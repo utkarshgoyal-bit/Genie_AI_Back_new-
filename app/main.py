@@ -8,6 +8,7 @@ from app.utils import Base, engine
 from app.models import Product
 from app.services.product_import_service import ProductImportService
 from fastapi.middleware.cors import CORSMiddleware
+from app.domains.admin import router as admin_router
 
 
 @asynccontextmanager
@@ -55,6 +56,7 @@ app.include_router(analyze_router)
 app.include_router(product_router)
 app.include_router(auth_router)
 app.include_router(history_router)
+app.include_router(admin_router)
 
 
 @app.get("/")
