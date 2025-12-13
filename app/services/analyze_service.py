@@ -147,26 +147,47 @@ SUPPORTED PLANTS (ONLY identify these 10):
 RULES:
 - Plant NOT in list OR confidence <70% → Return "Unknown"
 - Identify plant species first, then diagnose
+- BE SPECIFIC: Never use generic terms
+  * "Nutrient deficiency" → Identify WHICH nutrient (Iron, Nitrogen, Magnesium, etc.)
+  * "Pest infestation" → Identify WHICH pest (Mealybugs, Spider mites, etc.)
+  * "Fungal disease" → Identify WHICH fungus (Powdery mildew, Root rot, etc.)
 
 DIAGNOSTIC APPROACH:
 1. ASSESS WHOLE PLANT: Check if damage is isolated (dry leaves) or systemic (disease)
 2. Look for overall health: Are most leaves healthy? Is new growth present?
 3. Check abiotic FIRST: water, light, nutrients
 4. Check biotic SECOND: pests, diseases
+5. DIAGNOSE SPECIFICALLY: Use visual patterns to identify exact issue
 
 REGIONAL COMMON ISSUES:
 Pests: Mealy bugs (white cottony), Spider mites (webbing), Scale (brown bumps)
 Fungal: Powdery mildew (white powder), Root rot (soggy soil, wilting)
-Abiotic: Heat stress (scorched edges), Overwatering (yellow/droopy), Underwatering (crispy brown), Nutrient deficiency (yellowing patterns), Natural leaf aging (lower leaves only)
+Abiotic: 
+- Heat stress (scorched edges)
+- Overwatering (yellow/droopy leaves)
+- Underwatering (crispy brown edges)
+- Iron deficiency (interveinal chlorosis on young/new leaves)
+- Nitrogen deficiency (overall yellowing, older leaves first)
+- Magnesium deficiency (interveinal chlorosis on older leaves)
+- Calcium deficiency (distorted new growth, tip burn)
+- Phosphorus deficiency (purple/dark tints, stunted growth)
+- Natural leaf aging (lower leaves only)
 
 KEY DIAGNOSTIC CLUES:
 - Isolated dry leaves + healthy plant → Natural aging or minor stress, NOT disease
 - White substance → Check insects (legs/movement) vs fungal (powder)
-- Yellow leaves → Check soil moisture first, then nutrients
+- Yellow leaves → Check soil moisture first, then specific nutrient pattern
+- Nutrient deficiency patterns:
+  * Iron: Young leaves yellow with green veins (interveinal chlorosis)
+  * Nitrogen: Uniform yellowing of older leaves, pale new growth
+  * Magnesium: Yellowing between veins on older leaves
+  * Phosphorus: Purple/dark leaf undersides, stunted growth
+  * Calcium: New leaf tips brown/distorted
 - Brown spots → Check pattern: circular (fungal) vs irregular (physical)
 - Wilting → Check soil: soggy (overwater) vs dry (underwater)
 
 OUTPUT FORMAT:
+- "disease": SPECIFIC issue name (e.g., "Iron deficiency" NOT "Nutrient deficiency")
 - "cause": Single sentence, max 15 words
 - "symptoms": 2-5 short phrases, max 5 words each
 - "treatment": 3-5 action items, max 10 words each
