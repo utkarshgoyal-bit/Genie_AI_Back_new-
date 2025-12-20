@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ action }} Organization{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6">{{ action }} Organization</h1>
+    
+    <div class="bg-white p-6 rounded-lg shadow">
+        <form method="post" enctype="multipart/form-data" class="space-y-4">
+            {% csrf_token %}
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div class="col-span-2">
+                    <label class="block text-sm font-medium mb-1">Organization Name</label>
+                    {{ form.name }}
+                    {% if form.name.errors %}
+                    <p class="text-red-600 text-sm mt-1">{{ form.name.errors.0 }}</p>
+                    {% endif %}
+                </div>
+                
+                <div class="col-span-2">
+                    <label class="block text-sm font-medium mb-1">Logo</label>
+                    {{ form.logo }}
+                </div>
+                
+                <div class="col-span-2">
+                    <label class="block text-sm font-medium mb-1">Address Line 1</label>
+                    {{ form.address_line1 }}
+                </div>
+                
+                <div class="col-span-2">
+                    <label class="block text-sm font-medium mb-1">Address Line 2</label>
+                    {{ form.address_line2 }}
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">City</label>
+                    {{ form.city }}
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">State</label>
+                    {{ form.state }}
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">Pincode</label>
+                    {{ form.pincode }}
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">Country</label>
+                    {{ form.country }}
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">Email</label>
+                    {{ form.email }}
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">Phone</label>
+                    {{ form.phone }}
+                </div>
+                
+                <div class="col-span-2">
+                    <label class="block text-sm font-medium mb-1">Website</label>
+                    {{ form.website }}
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">GST Number</label>
+                    {{ form.gst_number }}
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">PAN Number</label>
+                    {{ form.pan_number }}
+                </div>
+                
+                <div class="col-span-2">
+                    <label class="flex items-center">
+                        {{ form.is_active }}
+                        <span class="ml-2 text-sm">Active</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="flex gap-4">
+                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                    Save
+                </button>
+                <a href="{% url 'organizations:organization_list' %}" class="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
