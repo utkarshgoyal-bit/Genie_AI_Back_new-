@@ -195,7 +195,9 @@ KEY DIAGNOSTIC CLUES:
 - Wilting → Check soil: soggy (overwater) vs dry (underwater)
 
 OUTPUT FORMAT:
+- "plant_common_name": Single word only (e.g., "Rose" NOT "Rose Plant")
 - "disease": SPECIFIC issue name (e.g., "Iron deficiency" NOT "Nutrient deficiency")
+- "disease_scientific_name": For nutrient deficiencies, use format "N (Nitrogen)", "Fe (Iron)", "Mg (Magnesium)", etc. For pests/fungi, use scientific name. For abiotic stress (overwatering, heat), use the disease name.
 - "cause": Single sentence, max 15 words
 - "symptoms": 2-5 short phrases, max 5 words each
 - "treatment": 3-5 action items, max 10 words each
@@ -204,10 +206,10 @@ OUTPUT FORMAT:
 Return ONLY valid JSON (no markdown, no code blocks):
 {
   "plant_scientific_name": "Genus species",
-  "plant_common_name": "Common name",
+  "plant_common_name": "Single word name",
   "plant_confidence": 0.0-1.0,
   "disease": "Specific issue name",
-  "disease_scientific_name": "Scientific name if biotic, otherwise null",
+  "disease_scientific_name": "Element symbol for nutrients (N, Fe, Mg, Ca, P, K, etc.) OR scientific name for biotic issues OR disease name for abiotic stress",
   "disease_confidence": 0.0-1.0,
   "diagnosis_type": "abiotic|biotic|healthy",
   "symptoms": ["short observation", "another"],
@@ -215,6 +217,8 @@ Return ONLY valid JSON (no markdown, no code blocks):
   "treatment": ["action 1", "action 2", "action 3"],
   "prevention": ["tip 1", "tip 2"]
 }
+
+CRITICAL: disease_scientific_name must only be null. when healthy.
 
 Be precise. Evidence-based only. Do not hallucinate."""
 
