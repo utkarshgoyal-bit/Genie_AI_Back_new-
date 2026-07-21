@@ -101,11 +101,8 @@ async def analyze_images(images: list[bytes]) -> dict:
         else:
             best_image = best_image[0]
 
-
-
     with open("/tmp/temp_detect.jpg", "wb") as f:
         f.write(best_image)
-
 
     yolo_results = model("/tmp/temp_detect.jpg", verbose=False)
     detections = yolo_results[0].boxes
@@ -197,28 +194,57 @@ KEY DIAGNOSTIC CLUES:
 OUTPUT FORMAT:
 - "plant_common_name": Single word only (e.g., "Rose" NOT "Rose Plant")
 - "disease": SPECIFIC issue name (e.g., "Iron deficiency" NOT "Nutrient deficiency")
-- "disease_scientific_name": For nutrient deficiencies, use format "N (Nitrogen)", "Fe (Iron)", "Mg (Magnesium)", etc. For pests/fungi, use scientific name. For abiotic stress (overwatering, heat), use the disease name.
 - "cause": Single sentence, max 15 words
 - "symptoms": 2-5 short phrases, max 5 words each
 - "treatment": 3-5 action items, max 10 words each
 - "prevention": 2-4 tips, max 10 words each
 
-Return ONLY valid JSON (no markdown, no code blocks):
+⚠️ CRITICAL: disease_scientific_name FIELD - MUST FOLLOW THESE EXACT RULES:
+
+IF disease is "Nitrogen deficiency" → disease_scientific_name MUST be "N (Nitrogen)"
+IF disease is "Iron deficiency" → disease_scientific_name MUST be "Fe (Iron)"
+IF disease is "Magnesium deficiency" → disease_scientific_name MUST be "Mg (Magnesium)"
+IF disease is "Calcium deficiency" → disease_scientific_name MUST be "Ca (Calcium)"
+IF disease is "Phosphorus deficiency" → disease_scientific_name MUST be "P (Phosphorus)"
+IF disease is "Potassium deficiency" → disease_scientific_name MUST be "K (Potassium)"
+IF disease is fungal/pest/bacterial → Use scientific organism name
+IF disease is "Overwatering" or "Underwatering" or "Heat stress" → Use the disease name
+IF plant is "Healthy" → disease_scientific_name MUST be null
+
+DO NOT use the disease name as disease_scientific_name for nutrient deficiencies!
+DO NOT return null for nutrient deficiencies!
+
+EXAMPLE OUTPUT (Magnesium deficiency):
 {
-  "plant_scientific_name": "Genus species",
-  "plant_common_name": "Single word name",
-  "plant_confidence": 0.0-1.0,
-  "disease": "Specific issue name",
-  "disease_scientific_name": "Element symbol for nutrients (N, Fe, Mg, Ca, P, K, etc.) OR scientific name for biotic issues OR disease name for abiotic stress",
-  "disease_confidence": 0.0-1.0,
-  "diagnosis_type": "abiotic|biotic|healthy",
-  "symptoms": ["short observation", "another"],
-  "cause": "Single sentence root cause",
-  "treatment": ["action 1", "action 2", "action 3"],
-  "prevention": ["tip 1", "tip 2"]
+  "plant_scientific_name": "Dypsis lutescens",
+  "plant_common_name": "Areca",
+  "plant_confidence": 0.9,
+  "disease": "Magnesium deficiency",
+  "disease_scientific_name": "Mg (Magnesium)",
+  "disease_confidence": 0.85,
+  "diagnosis_type": "abiotic",
+  "symptoms": ["Yellowing between veins", "Older leaves affected"],
+  "cause": "Insufficient magnesium in soil",
+  "treatment": ["Apply Epsom salt", "Use magnesium fertilizer"],
+  "prevention": ["Regular soil tests", "Balanced fertilization"]
 }
 
-CRITICAL: disease_scientific_name must only be null. when healthy.
+EXAMPLE OUTPUT (Iron deficiency):
+{
+  "plant_scientific_name": "Rosa",
+  "plant_common_name": "Rose",
+  "plant_confidence": 0.95,
+  "disease": "Iron deficiency",
+  "disease_scientific_name": "Fe (Iron)",
+  "disease_confidence": 0.9,
+  "diagnosis_type": "abiotic",
+  "symptoms": ["Young leaves yellow", "Green veins visible"],
+  "cause": "Iron unavailable in alkaline soil",
+  "treatment": ["Apply iron chelate", "Lower soil pH"],
+  "prevention": ["Check soil pH", "Use acidic fertilizers"]
+}
+
+Return ONLY valid JSON matching the structure above (no markdown, no code blocks).
 
 Be precise. Evidence-based only. Do not hallucinate."""
 
@@ -244,6 +270,24 @@ Be precise. Evidence-based only. Do not hallucinate."""
         # Parse JSON (handle text before/after code blocks)
         cleaned_json = extract_json_from_response(raw_response)
         diagnosis = json.loads(cleaned_json)
+        
+        # POST-PROCESSING: Force correct disease_scientific_name for nutrient deficiencies
+        disease = diagnosis.get("disease", "")
+        if disease and isinstance(disease, str):
+            disease_lower = disease.lower()
+            
+            if "nitrogen" in disease_lower and "deficiency" in disease_lower:
+                diagnosis["disease_scientific_name"] = "N (Nitrogen)"
+            elif "iron" in disease_lower and "deficiency" in disease_lower:
+                diagnosis["disease_scientific_name"] = "Fe (Iron)"
+            elif "magnesium" in disease_lower and "deficiency" in disease_lower:
+                diagnosis["disease_scientific_name"] = "Mg (Magnesium)"
+            elif "calcium" in disease_lower and "deficiency" in disease_lower:
+                diagnosis["disease_scientific_name"] = "Ca (Calcium)"
+            elif "phosphorus" in disease_lower and "deficiency" in disease_lower:
+                diagnosis["disease_scientific_name"] = "P (Phosphorus)"
+            elif "potassium" in disease_lower and "deficiency" in disease_lower:
+                diagnosis["disease_scientific_name"] = "K (Potassium)"
 
         # Add metadata
         diagnosis["success"] = True
